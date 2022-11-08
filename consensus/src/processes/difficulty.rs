@@ -64,13 +64,29 @@ impl<T: HeaderStoreReader> DifficultyManager<T> {
         difficulty_blocks.swap_remove(min_ts_index);
 
         let difficulty_blocks_len = difficulty_blocks.len();
-        
+
         // Calc the average target
-        let average_target = calc_average_target_unoptimized(difficulty_blocks);
+        let average_target = calc_average_target(difficulty_blocks);
 
         // Normalize by time
         let new_target = average_target * max(max_ts - min_ts, 1) / self.target_time_per_block / difficulty_blocks_len as u64;
         Uint256::try_from(new_target).expect("Expected target should be less than 2^256").compact_target_bits()
+    }
+}
+
+pub fn calc_average_target(difficulty_blocks: Vec<DifficultyBlock>) -> Uint320 {
+    let targets: Vec<Uint256> =
+        difficulty_blocks.into_iter().map(|diff_block| Uint256::from_compact_target_bits(diff_block.bits)).collect();
+    let targets_len = targets.len() as u64;
+    let (min_target, max_target) = targets.iter().minmax().into_option().unwrap();
+    let (min_target, max_target) = (*min_target, *max_target);
+    if max_target - min_target < Uint256::MAX / targets_len {
+        let offsets_sum = targets.into_iter().map(|t| t - min_target).sum::<Uint256>();
+        Uint320::from(min_target + offsets_sum / targets_len)
+    } else {
+        // In this case we need Uint320 to avoid overflow when summing and multiplying by the window size.
+        let targets_sum: Uint320 = targets.into_iter().map(Uint320::from).sum();
+        targets_sum / targets_len
     }
 }
 
