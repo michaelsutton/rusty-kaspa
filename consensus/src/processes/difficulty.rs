@@ -98,6 +98,27 @@ pub fn calc_average_target_unoptimized(difficulty_blocks: Vec<DifficultyBlock>) 
     targets_sum / (difficulty_blocks_len as u64)
 }
 
+pub fn calc_average_target__(targets: &Vec<Uint256>) -> Uint320 {
+    let targets_len = targets.len() as u64;
+    let (min_target, max_target) = targets.iter().minmax().into_option().unwrap();
+    let (min_target, max_target) = (*min_target, *max_target);
+    if max_target - min_target < Uint256::MAX / targets_len {
+        let offsets_sum = targets.iter().copied().map(|t| t - min_target).sum::<Uint256>();
+        Uint320::from(min_target + offsets_sum / targets_len)
+    } else {
+        // In this case we need Uint320 to avoid overflow when summing and multiplying by the window size.
+        let targets_sum: Uint320 = targets.iter().copied().map(Uint320::from).sum();
+        targets_sum / targets_len
+    }
+}
+
+pub fn calc_average_target_unoptimized__(targets: &Vec<Uint256>) -> Uint320 {
+    let targets_len = targets.len() as u64;
+    // We need Uint320 to avoid overflow when summing and multiplying by the window size.
+    let targets_sum: Uint320 = targets.iter().copied().map(Uint320::from).sum();
+    targets_sum / targets_len
+}
+
 pub fn calc_work(bits: u32) -> BlueWorkType {
     let target = Uint256::from_compact_target_bits(bits);
     // Source: https://github.com/bitcoin/bitcoin/blob/2e34374bf3e12b37b0c66824a6c998073cdfab01/src/chain.cpp#L131
@@ -110,11 +131,11 @@ pub fn calc_work(bits: u32) -> BlueWorkType {
     res.try_into().expect("Work should not exceed 2**192")
 }
 
-#[derive(Eq)]
+#[derive(Eq, Clone)]
 pub struct DifficultyBlock {
-    timestamp: u64,
-    bits: u32,
-    sortable_block: SortableBlock,
+    pub timestamp: u64,
+    pub bits: u32,
+    pub sortable_block: SortableBlock,
 }
 
 impl PartialEq for DifficultyBlock {
@@ -133,5 +154,31 @@ impl PartialOrd for DifficultyBlock {
 impl Ord for DifficultyBlock {
     fn cmp(&self, other: &Self) -> Ordering {
         self.timestamp.cmp(&other.timestamp).then_with(|| self.sortable_block.cmp(&other.sortable_block))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn average_target_test() {
+        let difficulty_blocks = gen_random_difficulty_blocks_with_close_targets();
+        assert_eq!(calc_average_target_unoptimized(difficulty_blocks.clone()), calc_average_target(difficulty_blocks));
+    }
+
+    fn gen_random_difficulty_blocks_with_close_targets() -> Vec<DifficultyBlock> {
+        let mut difficulty_blocks = Vec::with_capacity(2641);
+        let mut thread_rng = rand::thread_rng();
+        for _ in 0..2641 {
+            let random_target = thread_rng.gen::<u64>();
+            difficulty_blocks.push(DifficultyBlock {
+                timestamp: Default::default(),
+                bits: Uint256::from(random_target).compact_target_bits(),
+                sortable_block: Default::default(),
+            })
+        }
+        difficulty_blocks
     }
 }
