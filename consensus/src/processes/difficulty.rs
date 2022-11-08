@@ -60,18 +60,26 @@ impl<T: HeaderStoreReader> DifficultyManager<T> {
         let min_ts = difficulty_blocks[min_ts_index].timestamp;
         let max_ts = difficulty_blocks[max_ts_index].timestamp;
 
-        // We remove the minimal block because we want the average target for the internal window.
+        // We remove the min-timestamp block because we want the average target for the internal window.
         difficulty_blocks.swap_remove(min_ts_index);
 
-        // We need Uint320 to avoid overflow when summing and multiplying by the window size.
-        // TODO: Try to see if we can use U256 instead, by modifying the algorithm.
         let difficulty_blocks_len = difficulty_blocks.len();
-        let targets_sum: Uint320 =
-            difficulty_blocks.into_iter().map(|diff_block| Uint320::from(Uint256::from_compact_target_bits(diff_block.bits))).sum();
-        let average_target = targets_sum / (difficulty_blocks_len as u64);
+        
+        // Calc the average target
+        let average_target = calc_average_target_unoptimized(difficulty_blocks);
+
+        // Normalize by time
         let new_target = average_target * max(max_ts - min_ts, 1) / self.target_time_per_block / difficulty_blocks_len as u64;
         Uint256::try_from(new_target).expect("Expected target should be less than 2^256").compact_target_bits()
     }
+}
+
+pub fn calc_average_target_unoptimized(difficulty_blocks: Vec<DifficultyBlock>) -> Uint320 {
+    let difficulty_blocks_len = difficulty_blocks.len();
+    // We need Uint320 to avoid overflow when summing and multiplying by the window size.
+    let targets_sum: Uint320 =
+        difficulty_blocks.into_iter().map(|diff_block| Uint320::from(Uint256::from_compact_target_bits(diff_block.bits))).sum();
+    targets_sum / (difficulty_blocks_len as u64)
 }
 
 pub fn calc_work(bits: u32) -> BlueWorkType {
@@ -87,7 +95,7 @@ pub fn calc_work(bits: u32) -> BlueWorkType {
 }
 
 #[derive(Eq)]
-struct DifficultyBlock {
+pub struct DifficultyBlock {
     timestamp: u64,
     bits: u32,
     sortable_block: SortableBlock,
