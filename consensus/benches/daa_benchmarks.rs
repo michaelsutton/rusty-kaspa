@@ -1,7 +1,8 @@
 use consensus::processes::difficulty::{calc_average_target__, calc_average_target_naive__, calc_average_target_unoptimized__};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use math::Uint256;
-use rand::Rng;
+use math::{Uint192, Uint256};
+use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 pub fn daa_average_target_benchmark(c: &mut Criterion) {
     let targets = gen_random_close_targets();
@@ -14,10 +15,11 @@ pub fn daa_average_target_benchmark(c: &mut Criterion) {
 
 fn gen_random_close_targets() -> Vec<Uint256> {
     let mut targets = Vec::with_capacity(2641);
-    let mut thread_rng = rand::thread_rng();
+    let mut rng = ChaCha8Rng::from_seed([40u8; 32]);
+    let mut data = [0u8; 24];
     for _ in 0..2641 {
-        let random_target = thread_rng.gen::<u64>();
-        targets.push(Uint256::from(random_target));
+        rng.fill_bytes(&mut data);
+        targets.push(Uint256::from(Uint192::from_le_bytes(data)));
     }
     targets
 }

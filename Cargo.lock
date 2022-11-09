@@ -241,6 +241,7 @@ dependencies = [
  "parking_lot",
  "pow",
  "rand",
+ "rand_chacha",
  "rand_distr",
  "rayon",
  "rocksdb",
