@@ -1,14 +1,15 @@
-use consensus::processes::difficulty::{calc_average_target__, calc_average_target_unoptimized__};
+use consensus::processes::difficulty::{calc_average_target__, calc_average_target_naive__, calc_average_target_unoptimized__};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use math::Uint256;
 use rand::Rng;
 
 pub fn daa_average_target_benchmark(c: &mut Criterion) {
-    let difficulty_blocks = gen_random_close_targets();
-    c.bench_function("difficulty::calc_average_target", |b| b.iter(|| calc_average_target__(black_box(&difficulty_blocks))));
+    let targets = gen_random_close_targets();
+    c.bench_function("difficulty::calc_average_target", |b| b.iter(|| calc_average_target__(black_box(&targets))));
     c.bench_function("difficulty::calc_average_target_unoptimized", |b| {
-        b.iter(|| calc_average_target_unoptimized__(black_box(&difficulty_blocks)))
+        b.iter(|| calc_average_target_unoptimized__(black_box(&targets)))
     });
+    c.bench_function("difficulty::calc_average_target_naive", |b| b.iter(|| calc_average_target_naive__(black_box(&targets))));
 }
 
 fn gen_random_close_targets() -> Vec<Uint256> {

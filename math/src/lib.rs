@@ -71,6 +71,15 @@ impl TryFrom<Uint320> for Uint256 {
     }
 }
 
+impl From<Uint192> for Uint256 {
+    #[inline]
+    fn from(u: Uint192) -> Self {
+        let mut result = Uint256::ZERO;
+        result.0[..3].copy_from_slice(&u.0);
+        result
+    }
+}
+
 impl TryFrom<Uint256> for Uint192 {
     type Error = crate::uint::TryFromIntError;
 

@@ -1,7 +1,7 @@
 use crate::model::stores::{block_window_cache::BlockWindowHeap, ghostdag::GhostdagData, headers::HeaderStoreReader};
 use consensus_core::{BlockHashSet, BlueWorkType};
 use hashes::Hash;
-use math::{Uint256, Uint320};
+use math::{Uint192, Uint256, Uint320};
 use std::{
     cmp::{max, Ordering},
     sync::Arc,
@@ -102,7 +102,7 @@ pub fn calc_average_target__(targets: &Vec<Uint256>) -> Uint320 {
     let targets_len = targets.len() as u64;
     let (min_target, max_target) = targets.iter().minmax().into_option().unwrap();
     let (min_target, max_target) = (*min_target, *max_target);
-    if max_target - min_target < Uint256::MAX / targets_len {
+    if max_target - min_target < Uint256::from(Uint192::MAX) {
         let offsets_sum = targets.iter().copied().map(|t| t - min_target).sum::<Uint256>();
         Uint320::from(min_target + offsets_sum / targets_len)
     } else {
@@ -110,6 +110,12 @@ pub fn calc_average_target__(targets: &Vec<Uint256>) -> Uint320 {
         let targets_sum: Uint320 = targets.iter().copied().map(Uint320::from).sum();
         targets_sum / targets_len
     }
+}
+
+pub fn calc_average_target_naive__(targets: &Vec<Uint256>) -> Uint320 {
+    let targets_len = targets.len() as u64;
+    let targets_sum: Uint256 = targets.iter().copied().sum();
+    Uint320::from(targets_sum / targets_len)
 }
 
 pub fn calc_average_target_unoptimized__(targets: &Vec<Uint256>) -> Uint320 {
