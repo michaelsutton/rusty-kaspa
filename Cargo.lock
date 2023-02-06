@@ -2092,6 +2092,7 @@ dependencies = [
  "lockfree",
  "log",
  "prost",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tonic",
