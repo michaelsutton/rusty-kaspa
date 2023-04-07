@@ -8,6 +8,7 @@ use crate::{
     processes::transaction_validator::errors::{TxResult, TxRuleError},
 };
 use kaspa_consensus_core::{
+    acceptance_data::{AcceptanceData, AcceptedTxEntry},
     coinbase::*,
     hashing,
     header::Header,
@@ -22,7 +23,7 @@ use kaspa_consensus_core::{
 use kaspa_core::{info, trace};
 use kaspa_hashes::Hash;
 use kaspa_muhash::MuHash;
-use kaspa_utils::refs::Refs;
+use kaspa_utils::{option::OptionExtensions, refs::Refs};
 
 use rayon::prelude::*;
 use std::{iter::once, ops::Deref};
@@ -35,6 +36,7 @@ pub(super) struct UtxoProcessingContext<'a> {
     pub mergeset_diff: UtxoDiff,
     pub accepted_tx_ids: Vec<TransactionId>,
     pub mergeset_rewards: BlockHashMap<BlockRewardData>,
+    pub acceptance_data: AcceptanceData,
 }
 
 impl<'a> UtxoProcessingContext<'a> {
@@ -46,6 +48,7 @@ impl<'a> UtxoProcessingContext<'a> {
             mergeset_diff: UtxoDiff::default(),
             accepted_tx_ids: Vec::with_capacity(1), // We expect at least the selected parent coinbase tx
             mergeset_rewards: BlockHashMap::with_capacity(mergeset_size),
+            acceptance_data: Default::default(),
         }
     }
 
@@ -84,18 +87,28 @@ impl VirtualStateProcessor {
             let validated_transactions = self.validate_transactions_in_parallel(&txs, &composed_view, pov_daa_score);
 
             let mut block_fee = 0u64;
-            for validated_tx in validated_transactions {
+            let mut accepted_txs = Vec::with_capacity(validated_transactions.len());
+            for (validated_tx, index_within_block) in validated_transactions {
                 ctx.mergeset_diff.add_transaction(&validated_tx, pov_daa_score).unwrap();
                 ctx.multiset_hash.add_transaction(&validated_tx, pov_daa_score);
                 ctx.accepted_tx_ids.push(validated_tx.id());
                 block_fee += validated_tx.calculated_fee;
+                accepted_txs.push(AcceptedTxEntry { transaction_id: validated_tx.id(), index_within_block });
+            }
+
+            // We add to acceptance data only if the merged block contains some accepted txs
+
+            if !accepted_txs.is_empty() {
+                ctx.acceptance_data.merged_blocks.insert(merged_block, accepted_txs).expect_none("mergeset has no duplicates");
             }
 
             let coinbase_data = self.coinbase_manager.deserialize_coinbase_payload(&txs[0].payload).unwrap();
-            ctx.mergeset_rewards.insert(
-                merged_block,
-                BlockRewardData::new(coinbase_data.subsidy, block_fee, coinbase_data.miner_data.script_public_key),
-            );
+            ctx.mergeset_rewards
+                .insert(
+                    merged_block,
+                    BlockRewardData::new(coinbase_data.subsidy, block_fee, coinbase_data.miner_data.script_public_key),
+                )
+                .expect_none("mergeset has no duplicates");
         }
 
         // Make sure accepted tx ids are sorted before building the merkle root
@@ -173,19 +186,20 @@ impl VirtualStateProcessor {
     }
 
     /// Validates transactions against the provided `utxo_view` and returns a vector with all transactions
-    /// which passed the validation
+    /// which passed the validation along with their original index within the containing block
     pub fn validate_transactions_in_parallel<'a, V: UtxoView + Sync>(
         &self,
         txs: &'a Vec<Transaction>,
         utxo_view: &V,
         pov_daa_score: u64,
-    ) -> Vec<ValidatedTransaction<'a>> {
+    ) -> Vec<(ValidatedTransaction<'a>, u32)> {
         self.thread_pool.install(|| {
             txs
                 .par_iter() // We can do this in parallel without complications since block body validation already ensured
                             // that all txs within each block are independent
+                .enumerate()
                 .skip(1) // Skip the coinbase tx.
-                .filter_map(|tx| self.validate_transaction_in_utxo_context(tx, &utxo_view, pov_daa_score).ok())
+                .filter_map(|(i, tx)| self.validate_transaction_in_utxo_context(tx, &utxo_view, pov_daa_score).ok().map(|vtx| (vtx, i as u32)))
                 .collect()
         })
     }
@@ -211,7 +225,7 @@ impl VirtualStateProcessor {
         match res {
             Ok(calculated_fee) => Ok(ValidatedTransaction::new(populated_tx, calculated_fee)),
             Err(tx_rule_error) => {
-                info!("tx rule error {} for tx {}", tx_rule_error, transaction.id());
+                info!("Rejecting transaction {} due to transaction rule error: {}", transaction.id(), tx_rule_error);
                 Err(tx_rule_error)
             }
         }

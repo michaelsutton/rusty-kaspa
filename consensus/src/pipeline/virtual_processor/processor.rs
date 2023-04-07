@@ -338,14 +338,13 @@ impl VirtualStateProcessor {
                     let res = self.verify_expected_utxo_state(&mut ctx, &selected_parent_utxo_view, &header);
 
                     if let Err(rule_error) = res {
-                        info!("{:?}", rule_error);
+                        info!("Block {} is disqualified from virtual chain: {:?}", current, rule_error);
                         self.statuses_store.write().set(current, StatusDisqualifiedFromChain).unwrap();
                     } else {
                         // Accumulate
                         accumulated_diff.with_diff_in_place(&ctx.mergeset_diff).unwrap();
                         // Commit UTXO data for current chain block
-                        self.commit_utxo_state(current, ctx.mergeset_diff, ctx.multiset_hash, AcceptanceData {});
-                        // TODO: AcceptanceData
+                        self.commit_utxo_state(current, ctx.mergeset_diff, ctx.multiset_hash, ctx.acceptance_data);
 
                         // Count the number of UTXO-processed chain blocks
                         chain_block_counter += 1;
@@ -729,7 +728,7 @@ impl VirtualStateProcessor {
         self.pruning_store.write().set(self.genesis.hash, self.genesis.hash, 0).unwrap();
 
         // Write the UTXO state of genesis
-        self.commit_utxo_state(self.genesis.hash, UtxoDiff::default(), MuHash::new(), AcceptanceData {});
+        self.commit_utxo_state(self.genesis.hash, UtxoDiff::default(), MuHash::new(), AcceptanceData::default());
     }
 
     pub fn import_pruning_point_utxo_set(
