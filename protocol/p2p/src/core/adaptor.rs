@@ -81,7 +81,7 @@ impl Adaptor {
     }
 
     pub fn hub_channel_size() -> usize {
-        128
+        512
     }
 }
 
