@@ -74,7 +74,7 @@ struct Args {
     #[arg(short, long)]
     output_dir: Option<String>,
 
-    /// Input directory of a previous simulation DB (NOTE: simulation args must be compatible with the original run)
+    /// Input directory of an existing consensus
     #[arg(short, long)]
     input_dir: Option<String>,
 
@@ -118,7 +118,8 @@ fn main() {
     let mut builder = ConfigBuilder::new(params)
         .apply_args(|config| apply_args_to_perf_params(&args, &mut config.perf))
         .adjust_perf_params_to_consensus_params()
-        .enable_sanity_checks();
+        .enable_sanity_checks()
+        .skip_adding_genesis();
     if !args.test_pruning {
         builder = builder.set_archival();
     }
@@ -215,19 +216,26 @@ fn topologically_ordered_hashes(src_consensus: &Consensus, genesis_hash: Hash) -
     let mut visited = BlockHashSet::new();
     let mut vec = Vec::new();
     let relations = src_consensus.relations_stores.read();
+    let mut count = 0;
     while let Some(current) = queue.pop_front() {
         for child in relations[0].get_children(current).unwrap().iter() {
             if visited.insert(*child) {
                 queue.push_back(*child);
                 vec.push(*child);
+                count += 1;
+                if count % 5000 == 0 {
+                    info!("Travesed {} blocks", count);
+                }
             }
         }
     }
-    vec.sort_by_cached_key(|&h| src_consensus.headers_store.get_timestamp(h).unwrap());
+    info!("Sorting...");
+    vec.sort_by_cached_key(|&h| src_consensus.ghostdag_primary_store.get_blue_work(h).unwrap());
     vec
 }
 
 fn print_stats(src_consensus: &Consensus, hashes: &[Hash], delay: f64, bps: f64, k: KType) -> usize {
+    info!("Collecting stats...");
     let blues_mean =
         hashes.iter().map(|&h| src_consensus.ghostdag_primary_store.get_data(h).unwrap().mergeset_blues.len()).sum::<usize>() as f64
             / hashes.len() as f64;
@@ -240,6 +248,6 @@ fn print_stats(src_consensus: &Consensus, hashes: &[Hash], delay: f64, bps: f64,
     let num_txs = hashes.iter().map(|&h| src_consensus.block_transactions_store.get(h).unwrap().len()).sum::<usize>();
     let txs_mean = num_txs as f64 / hashes.len() as f64;
     info!("[DELAY={delay}, BPS={bps}, GHOSTDAG K={k}]");
-    info!("[Average stats of generated DAG] blues: {blues_mean}, reds: {reds_mean}, parents: {parents_mean}, txs: {txs_mean}");
+    info!("[Average stats of DAG] blues: {blues_mean}, reds: {reds_mean}, parents: {parents_mean}, txs: {txs_mean}");
     num_txs
 }
