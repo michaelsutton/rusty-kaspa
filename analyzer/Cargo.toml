@@ -1,0 +1,31 @@
+[package]
+name = "analyzer"
+description = "Kaspa Data Analysis"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+include.workspace = true
+license.workspace = true
+
+[dependencies]
+kaspa-hashes.workspace = true
+kaspa-core.workspace = true
+kaspa-utils.workspace = true
+kaspa-database.workspace = true
+kaspa-consensus.workspace = true
+kaspa-consensus-core.workspace = true
+kaspa-consensus-notify.workspace = true
+
+rand.workspace = true
+itertools.workspace = true
+futures-util.workspace = true
+rayon.workspace = true
+clap.workspace = true
+indexmap.workspace = true
+log.workspace = true
+async-channel.workspace = true
+num_cpus.workspace = true
+futures.workspace = true
+
+rand_distr = "0.4"
+tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread"] }

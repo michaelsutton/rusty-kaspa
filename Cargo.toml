@@ -12,6 +12,7 @@ members = [
     "consensus/pow",
     "kaspad",
     "simpa",
+    "analyzer",
     "wasm",
     "math",
     "crypto/hashes",

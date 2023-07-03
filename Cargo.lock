@@ -41,6 +41,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "analyzer"
+version = "0.1.2"
+dependencies = [
+ "async-channel",
+ "clap 4.1.8",
+ "futures",
+ "futures-util",
+ "indexmap",
+ "itertools 0.10.5",
+ "kaspa-consensus",
+ "kaspa-consensus-core",
+ "kaspa-consensus-notify",
+ "kaspa-core",
+ "kaspa-database",
+ "kaspa-hashes",
+ "kaspa-utils",
+ "log",
+ "num_cpus",
+ "rand 0.8.5",
+ "rand_distr",
+ "rayon",
+ "tokio",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
