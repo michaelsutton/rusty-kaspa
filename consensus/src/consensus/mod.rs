@@ -95,7 +95,7 @@ pub struct Consensus {
     pub(super) storage: Arc<ConsensusStorage>,
 
     // Services and managers
-    pub(super) services: Arc<ConsensusServices>,
+    pub services: Arc<ConsensusServices>,
 
     // Pruning lock
     pruning_lock: SessionLock,

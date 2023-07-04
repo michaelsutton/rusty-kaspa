@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+#![allow(unreachable_code)]
 
 use async_channel::unbounded;
 use clap::Parser;
@@ -11,10 +12,12 @@ use kaspa_consensus::{
     consensus::Consensus,
     constants::perf::PerfParams,
     model::stores::{
+        acceptance_data::AcceptanceDataStoreReader,
         block_transactions::BlockTransactionsStoreReader,
         ghostdag::{GhostdagStoreReader, KType},
         headers::HeaderStoreReader,
         relations::RelationsStoreReader,
+        virtual_state::VirtualStateStoreReader,
     },
     params::{Params, Testnet11Bps, DEVNET_PARAMS, TESTNET11_PARAMS},
 };
@@ -147,7 +150,7 @@ fn main() {
     let notification_root = Arc::new(ConsensusNotificationRoot::new(dummy_notification_sender));
     let consensus2 = Arc::new(Consensus::new(db2, config.clone(), Default::default(), notification_root, Default::default()));
     let handles2 = consensus2.run_processors();
-    validate(&consensus, &consensus2, &config, args.delay, args.bps);
+    validate(&consensus, &consensus2, &config, args.bps);
     consensus2.shutdown(handles2);
     drop(consensus);
 }
@@ -162,10 +165,13 @@ fn apply_args_to_perf_params(args: &Args, perf_params: &mut PerfParams) {
 }
 
 #[tokio::main]
-async fn validate(src_consensus: &Consensus, dst_consensus: &Consensus, params: &Params, delay: f64, bps: f64) {
+async fn validate(src_consensus: &Consensus, dst_consensus: &Consensus, params: &Params, bps: f64) {
+    tx_efficiency(src_consensus, params.genesis.hash);
+    return;
+
     let hashes = topologically_ordered_hashes(src_consensus, params.genesis.hash);
     let num_blocks = hashes.len();
-    let num_txs = print_stats(src_consensus, &hashes, delay, bps, params.ghostdag_k);
+    let num_txs = print_stats(src_consensus, &hashes, bps, params.ghostdag_k);
     info!("Validating {num_blocks} blocks with {num_txs} transactions overall...");
     // let start = std::time::Instant::now();
     // let chunks = hashes.into_iter().chunks(1000);
@@ -211,6 +217,37 @@ fn submit_chunk(
     futures
 }
 
+fn tx_efficiency(consensus: &Consensus, genesis_hash: Hash) {
+    let sink = consensus.get_sink();
+    let (mut total_txs, mut accepted_txs) = (0, 0);
+    let (mut epoch_txs, mut epoch_accepted_txs) = (0, 0);
+    for (i, cb) in consensus.services.reachability_service.default_backward_chain_iterator(sink).enumerate() {
+        let ad = consensus.acceptance_data_store.get(cb).unwrap();
+        let blues: BlockHashSet = consensus.ghostdag_primary_store.get_mergeset_blues(cb).unwrap().iter().copied().collect();
+        for (j, mbad) in ad.iter().enumerate() {
+            if !blues.contains(&mbad.block_hash) {
+                continue;
+            }
+            let mbtx = consensus.block_transactions_store.get(mbad.block_hash).unwrap();
+            total_txs += if j == 0 { mbtx.len() } else { mbtx.len() - 1 };
+            epoch_txs += if j == 0 { mbtx.len() } else { mbtx.len() - 1 };
+            accepted_txs += mbad.accepted_transactions.len();
+            epoch_accepted_txs += mbad.accepted_transactions.len();
+        }
+        if (i + 1) % 2000 == 0 {
+            info!(
+                "Tx efficiency: {:.4}, epoch: {:.4}",
+                accepted_txs as f64 / total_txs as f64,
+                epoch_accepted_txs as f64 / epoch_txs as f64
+            );
+            epoch_txs = 0;
+            epoch_accepted_txs = 0;
+        }
+    }
+
+    info!("{}, {}, {}", accepted_txs, total_txs, accepted_txs as f64 / total_txs as f64);
+}
+
 fn topologically_ordered_hashes(src_consensus: &Consensus, genesis_hash: Hash) -> Vec<Hash> {
     let mut queue: VecDeque<Hash> = std::iter::once(genesis_hash).collect();
     let mut visited = BlockHashSet::new();
@@ -229,25 +266,29 @@ fn topologically_ordered_hashes(src_consensus: &Consensus, genesis_hash: Hash) -
             }
         }
     }
-    info!("Sorting...");
-    vec.sort_by_cached_key(|&h| src_consensus.ghostdag_primary_store.get_blue_work(h).unwrap());
+    // info!("Sorting...");
+    // vec.sort_by_cached_key(|&h| src_consensus.ghostdag_primary_store.get_blue_work(h).unwrap());
     vec
 }
 
-fn print_stats(src_consensus: &Consensus, hashes: &[Hash], delay: f64, bps: f64, k: KType) -> usize {
-    info!("Collecting stats...");
+fn print_stats(src_consensus: &Consensus, hashes: &[Hash], bps: f64, k: KType) -> usize {
+    info!("Collecting stats for {} blocks...", hashes.len());
     let blues_mean =
         hashes.iter().map(|&h| src_consensus.ghostdag_primary_store.get_data(h).unwrap().mergeset_blues.len()).sum::<usize>() as f64
             / hashes.len() as f64;
+    info!("blues: {}", blues_mean);
     let reds_mean =
         hashes.iter().map(|&h| src_consensus.ghostdag_primary_store.get_data(h).unwrap().mergeset_reds.len()).sum::<usize>() as f64
             / hashes.len() as f64;
+    info!("reds: {}", reds_mean);
     let parents_mean = hashes.iter().map(|&h| src_consensus.headers_store.get_header(h).unwrap().direct_parents().len()).sum::<usize>()
         as f64
         / hashes.len() as f64;
-    let num_txs = hashes.iter().map(|&h| src_consensus.block_transactions_store.get(h).unwrap().len()).sum::<usize>();
-    let txs_mean = num_txs as f64 / hashes.len() as f64;
-    info!("[DELAY={delay}, BPS={bps}, GHOSTDAG K={k}]");
+    info!("parents: {}", parents_mean);
+    let num_txs =
+        hashes.iter().map(|&h| src_consensus.block_transactions_store.get(h).map(|v| v.len()).unwrap_or_default()).sum::<usize>();
+    let txs_mean = num_txs as f64 / hashes.len() as f64; // TODO
+    info!("[BPS={bps}, GHOSTDAG K={k}]");
     info!("[Average stats of DAG] blues: {blues_mean}, reds: {reds_mean}, parents: {parents_mean}, txs: {txs_mean}");
     num_txs
 }
