@@ -28,7 +28,8 @@ use kaspa_consensus_notify::root::ConsensusNotificationRoot;
 use kaspa_core::{info, warn};
 use kaspa_database::utils::{create_temp_db_with_parallelism, load_existing_db};
 use kaspa_hashes::Hash;
-use std::{collections::VecDeque, sync::Arc};
+use serde::{Deserialize, Serialize};
+use std::{collections::VecDeque, fs::File, io::Write, ops::Deref, path::Path, sync::Arc};
 
 /// Kaspa Network Simulator
 #[derive(Parser, Debug)]
@@ -166,6 +167,9 @@ fn apply_args_to_perf_params(args: &Args, perf_params: &mut PerfParams) {
 
 #[tokio::main]
 async fn validate(src_consensus: &Consensus, dst_consensus: &Consensus, params: &Params, bps: f64) {
+    save_to_json(src_consensus, params.genesis.hash, "/home/pool/michael/data/testnet11-dag-dump.json");
+    return;
+
     tx_efficiency(src_consensus, params.genesis.hash);
     return;
 
@@ -291,4 +295,34 @@ fn print_stats(src_consensus: &Consensus, hashes: &[Hash], bps: f64, k: KType) -
     info!("[BPS={bps}, GHOSTDAG K={k}]");
     info!("[Average stats of DAG] blues: {blues_mean}, reds: {reds_mean}, parents: {parents_mean}, txs: {txs_mean}");
     num_txs
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonBlock {
+    id: String,
+    blue: bool,
+    parents: Vec<String>,
+}
+
+fn save_to_json(consensus: &Consensus, genesis_hash: Hash, file_path: &str) {
+    let mut file = File::options().write(true).create(true).truncate(true).open(Path::new(file_path)).unwrap();
+    // let encoder = GzEncoder::new(file);
+
+    let sink = consensus.get_sink();
+    let relations_read = consensus.relations_stores.read();
+    for (i, cb) in consensus.services.reachability_service.default_backward_chain_iterator(sink).skip(20000).enumerate() {
+        let gd = consensus.ghostdag_primary_store.get_data(cb).unwrap();
+        let blues: BlockHashSet = gd.mergeset_blues.iter().copied().collect();
+        for b in gd.consensus_ordered_mergeset(consensus.ghostdag_primary_store.deref()) {
+            let parents = relations_read[0].get_parents(b).unwrap();
+            let jb =
+                JsonBlock { id: b.to_string(), blue: blues.contains(&b), parents: parents.iter().map(|h| h.to_string()).collect() };
+            let sb = serde_json::to_string(&jb).unwrap();
+            writeln!(file, "{}", sb).unwrap();
+        }
+
+        if i > 120 {
+            break;
+        }
+    }
 }
