@@ -38,6 +38,7 @@ impl HandleAnticoneRequests {
             let (block, context): (Hash, Hash) = msg.try_into()?;
 
             debug!("received anticone request with block hash: {}, context hash: {} for peer {}", block, context, self.router);
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (block, context), self.router);
 
             let consensus = self.ctx.consensus();
             let session = consensus.session().await;

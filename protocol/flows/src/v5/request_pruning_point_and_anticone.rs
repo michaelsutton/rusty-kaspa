@@ -42,6 +42,8 @@ impl PruningPointAndItsAnticoneRequestsFlow {
             dequeue!(self.incoming_route, Payload::RequestPruningPointAndItsAnticone)?;
             debug!("Got request for pruning point and its anticone");
 
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (), self.router);
+
             let consensus = self.ctx.consensus();
             let mut session = consensus.session().await;
 

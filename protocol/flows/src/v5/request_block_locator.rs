@@ -36,6 +36,8 @@ impl RequestBlockLocatorFlow {
             let msg = dequeue!(self.incoming_route, Payload::RequestBlockLocator)?;
             let (high, limit) = msg.try_into()?;
 
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (high, limit), self.router);
+
             let locator =
                 self.ctx.consensus().session().await.async_create_block_locator_from_pruning_point(high, limit as usize).await?;
 

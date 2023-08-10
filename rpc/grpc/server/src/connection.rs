@@ -2,7 +2,7 @@ use crate::{
     error::{GrpcServerError, GrpcServerResult},
     manager::Manager,
 };
-use kaspa_core::debug;
+use kaspa_core::{debug, warn};
 use kaspa_grpc_core::protowire::{kaspad_request::Payload, *};
 use kaspa_notify::{
     connection::Connection as ConnectionT,
@@ -86,7 +86,7 @@ impl Connection {
 
                     res = incoming_stream.message() => match res {
                         Ok(Some(request)) => {
-                            //trace!("GRPC: request: {:?}, client-id: {}", request, connection.identity());
+                            warn!("GRPC: request: {:?}, client-id: {}", request.payload.as_ref().map(|p| p.var_name()), connection.identity());
 
                             let response = match request.is_subscription() {
                                 true => {

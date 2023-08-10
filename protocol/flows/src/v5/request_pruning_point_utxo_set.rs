@@ -38,6 +38,7 @@ impl RequestPruningPointUtxoSetFlow {
     async fn start_impl(&mut self) -> Result<(), ProtocolError> {
         loop {
             let expected_pp = dequeue!(self.incoming_route, Payload::RequestPruningPointUtxoSet)?.try_into()?;
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (expected_pp), self.router);
             self.handle_request(expected_pp).await?
         }
     }

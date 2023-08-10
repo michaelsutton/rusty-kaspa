@@ -30,6 +30,8 @@ impl HandleIbdBlockRequests {
             let msg = dequeue!(self.incoming_route, Payload::RequestIbdBlocks)?;
             let hashes: Vec<_> = msg.try_into()?;
 
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (hashes.len(), hashes.first()), self.router);
+
             debug!("got request for {} IBD blocks", hashes.len());
             let consensus = self.ctx.consensus();
             let session = consensus.session().await;

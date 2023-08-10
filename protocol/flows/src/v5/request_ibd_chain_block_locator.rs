@@ -37,6 +37,8 @@ impl RequestIbdChainBlockLocatorFlow {
             let msg = dequeue!(self.incoming_route, Payload::RequestIbdChainBlockLocator)?;
             let (low, high) = msg.try_into()?;
 
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (low, high), self.router);
+
             let locator =
                 match (self.ctx.consensus().session().await).async_create_virtual_selected_chain_block_locator(low, high).await {
                     Ok(locator) => Ok(locator),

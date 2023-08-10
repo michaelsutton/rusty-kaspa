@@ -83,6 +83,54 @@ impl kaspad_request::Payload {
                 | Payload::StopNotifyingPruningPointUtxoSetOverrideRequest(_)
         )
     }
+
+    pub fn var_name(&self) -> &str {
+        match self {
+            kaspad_request::Payload::GetCurrentNetworkRequest(_) => "GetCurrentNetworkRequest",
+            kaspad_request::Payload::SubmitBlockRequest(_) => "SubmitBlockRequest",
+            kaspad_request::Payload::GetBlockTemplateRequest(_) => "GetBlockTemplateRequest",
+            kaspad_request::Payload::NotifyBlockAddedRequest(_) => "NotifyBlockAddedRequest",
+            kaspad_request::Payload::GetPeerAddressesRequest(_) => "GetPeerAddressesRequest",
+            kaspad_request::Payload::GetSelectedTipHashRequest(_) => "GetSelectedTipHashRequest",
+            kaspad_request::Payload::GetMempoolEntryRequest(_) => "GetMempoolEntryRequest",
+            kaspad_request::Payload::GetConnectedPeerInfoRequest(_) => "GetConnectedPeerInfoRequest",
+            kaspad_request::Payload::AddPeerRequest(_) => "AddPeerRequest",
+            kaspad_request::Payload::SubmitTransactionRequest(_) => "SubmitTransactionRequest",
+            kaspad_request::Payload::NotifyVirtualChainChangedRequest(_) => "NotifyVirtualChainChangedRequest",
+            kaspad_request::Payload::GetBlockRequest(_) => "GetBlockRequest",
+            kaspad_request::Payload::GetSubnetworkRequest(_) => "GetSubnetworkRequest",
+            kaspad_request::Payload::GetVirtualChainFromBlockRequest(_) => "GetVirtualChainFromBlockRequest",
+            kaspad_request::Payload::GetBlocksRequest(_) => "GetBlocksRequest",
+            kaspad_request::Payload::GetBlockCountRequest(_) => "GetBlockCountRequest",
+            kaspad_request::Payload::GetBlockDagInfoRequest(_) => "GetBlockDagInfoRequest",
+            kaspad_request::Payload::ResolveFinalityConflictRequest(_) => "ResolveFinalityConflictRequest",
+            kaspad_request::Payload::NotifyFinalityConflictRequest(_) => "NotifyFinalityConflictRequest",
+            kaspad_request::Payload::GetMempoolEntriesRequest(_) => "GetMempoolEntriesRequest",
+            kaspad_request::Payload::ShutdownRequest(_) => "ShutdownRequest",
+            kaspad_request::Payload::GetHeadersRequest(_) => "GetHeadersRequest",
+            kaspad_request::Payload::NotifyUtxosChangedRequest(_) => "NotifyUtxosChangedRequest",
+            kaspad_request::Payload::GetUtxosByAddressesRequest(_) => "GetUtxosByAddressesRequest",
+            kaspad_request::Payload::GetSinkBlueScoreRequest(_) => "GetSinkBlueScoreRequest",
+            kaspad_request::Payload::NotifySinkBlueScoreChangedRequest(_) => "NotifySinkBlueScoreChangedRequest",
+            kaspad_request::Payload::BanRequest(_) => "BanRequest",
+            kaspad_request::Payload::UnbanRequest(_) => "UnbanRequest",
+            kaspad_request::Payload::GetInfoRequest(_) => "GetInfoRequest",
+            kaspad_request::Payload::StopNotifyingUtxosChangedRequest(_) => "StopNotifyingUtxosChangedRequest",
+            kaspad_request::Payload::NotifyPruningPointUtxoSetOverrideRequest(_) => "NotifyPruningPointUtxoSetOverrideRequest",
+            kaspad_request::Payload::StopNotifyingPruningPointUtxoSetOverrideRequest(_) => {
+                "StopNotifyingPruningPointUtxoSetOverrideRequest"
+            }
+            kaspad_request::Payload::EstimateNetworkHashesPerSecondRequest(_) => "EstimateNetworkHashesPerSecondRequest",
+            kaspad_request::Payload::NotifyVirtualDaaScoreChangedRequest(_) => "NotifyVirtualDaaScoreChangedRequest",
+            kaspad_request::Payload::GetBalanceByAddressRequest(_) => "GetBalanceByAddressRequest",
+            kaspad_request::Payload::GetBalancesByAddressesRequest(_) => "GetBalancesByAddressesRequest",
+            kaspad_request::Payload::NotifyNewBlockTemplateRequest(_) => "NotifyNewBlockTemplateRequest",
+            kaspad_request::Payload::GetMempoolEntriesByAddressesRequest(_) => "GetMempoolEntriesByAddressesRequest",
+            kaspad_request::Payload::GetCoinSupplyRequest(_) => "GetCoinSupplyRequest",
+            kaspad_request::Payload::PingRequest(_) => "PingRequest",
+            kaspad_request::Payload::GetProcessMetricsRequest(_) => "GetProcessMetricsRequest",
+        }
+    }
 }
 
 impl KaspadResponse {

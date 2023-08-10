@@ -1,4 +1,4 @@
-use crate::{signals::Shutdown, task::service::AsyncServiceResult};
+use crate::{error, signals::Shutdown, task::service::AsyncServiceResult, warn};
 use futures_util::future::{select_all, try_join_all};
 use kaspa_core::core::Core;
 use kaspa_core::service::Service;
@@ -58,13 +58,26 @@ impl AsyncRuntime {
 
     pub async fn worker_impl(self: &Arc<AsyncRuntime>, core: Arc<Core>) {
         let rt_handle = tokio::runtime::Handle::current();
-        std::thread::spawn(move || loop {
-            // See https://github.com/tokio-rs/tokio/issues/4730 and comment therein referring to
-            // https://gist.github.com/Darksonn/330f2aa771f95b5008ddd4864f5eb9e9#file-main-rs-L6
-            // In our case it's hard to avoid some short blocking i/o calls to the DB so we place this
-            // workaround for now to avoid any rare yet possible system freeze.
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            rt_handle.spawn(std::future::ready(()));
+        std::thread::spawn(move || {
+            let mut i = 0u64;
+            loop {
+                // See https://github.com/tokio-rs/tokio/issues/4730 and comment therein referring to
+                // https://gist.github.com/Darksonn/330f2aa771f95b5008ddd4864f5eb9e9#file-main-rs-L6
+                // In our case it's hard to avoid some short blocking i/o calls to the DB so we place this
+                // workaround for now to avoid any rare yet possible system freeze.
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                let f = rt_handle.spawn(std::future::ready(()));
+                match rt_handle.block_on(f) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        error!("Failed to register wakeup task to the tokio runtime: {}", err);
+                    }
+                }
+                if i % 10 == 0 {
+                    warn!("[TOKIO RUNTIME MONITOR TICK]");
+                }
+                i += 1;
+            }
         });
 
         // Start all async services

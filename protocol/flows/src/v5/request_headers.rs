@@ -43,6 +43,8 @@ impl RequestHeadersFlow {
             let msg = dequeue!(self.incoming_route, Payload::RequestHeaders)?;
             let (high, mut low) = msg.try_into()?;
 
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (high, low), self.router);
+
             let consensus = self.ctx.consensus();
             let mut session = consensus.session().await;
 

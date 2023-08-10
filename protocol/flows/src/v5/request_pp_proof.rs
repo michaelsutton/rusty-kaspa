@@ -36,6 +36,9 @@ impl RequestPruningPointProofFlow {
         loop {
             dequeue!(self.incoming_route, Payload::RequestPruningPointProof)?;
             debug!("Got pruning point proof request");
+
+            kaspa_core::warn!("Received {} request: {:?} for peer {}", self.name(), (), self.router);
+
             let proof = (self.ctx.consensus().session().await).async_get_pruning_point_proof().await;
             self.router
                 .enqueue(make_message!(
