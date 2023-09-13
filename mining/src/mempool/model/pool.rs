@@ -11,7 +11,7 @@ use crate::{
 };
 use kaspa_consensus_core::tx::{MutableTransaction, TransactionId};
 use kaspa_mining_errors::mempool::RuleResult;
-use std::collections::{hash_set::Iter, HashMap, HashSet};
+use std::collections::{hash_set::Iter, HashMap, HashSet, VecDeque};
 
 pub(crate) type TransactionsEdges = HashMap<TransactionId, TransactionIdSet>;
 
@@ -65,26 +65,31 @@ pub(crate) trait Pool {
     /// Returns the ids of all transactions being directly and indirectly chained to `transaction_id`
     /// and existing in the pool.
     ///
+    /// The transactions are traversed in BFS mode and returned sorted topologically, layered by
+    /// levels of descendance.
+    ///
     /// NOTE: this operation's complexity might become linear in the size of the mempool if the mempool
     /// contains deeply chained transactions
-    fn get_redeemer_ids_in_pool(&self, transaction_id: &TransactionId) -> TransactionIdSet {
-        let mut redeemers = TransactionIdSet::new();
+    fn get_redeemer_ids_in_pool(&self, transaction_id: &TransactionId) -> Vec<TransactionId> {
+        let mut visited = TransactionIdSet::new();
+        let mut descendants = vec![];
         if let Some(transaction) = self.get(transaction_id) {
-            let mut stack = vec![transaction];
-            while let Some(transaction) = stack.pop() {
+            let mut queue = VecDeque::new();
+            queue.push_back(transaction);
+            while let Some(transaction) = queue.pop_front() {
                 if let Some(chains) = self.chained().get(&transaction.id()) {
-                    for redeemer_id in chains {
+                    chains.iter().for_each(|redeemer_id| {
                         if let Some(redeemer) = self.get(redeemer_id) {
-                            // Do not revisit transactions
-                            if redeemers.insert(*redeemer_id) {
-                                stack.push(redeemer);
+                            if visited.insert(*redeemer_id) {
+                                descendants.push(*redeemer_id);
+                                queue.push_back(redeemer);
                             }
                         }
-                    }
+                    })
                 }
             }
         }
-        redeemers
+        descendants
     }
 
     /// Returns the ids of all transactions which directly chained to `transaction_id`
