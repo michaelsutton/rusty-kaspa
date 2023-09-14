@@ -161,7 +161,8 @@ async fn bench_bbt_latency() {
     // const TX_LEVEL_WIDTH: usize = 5_000;
     // const TPS_PRESSURE: u64 = 2000;
 
-    const TX_COUNT: usize = 600_000;
+    const MEMPOOL_TARGET: u64 = 60_000;
+    const TX_COUNT: usize = 200_000;
     const TX_LEVEL_WIDTH: usize = 1_000;
     const TPS_PRESSURE: u64 = u64::MAX;
 
@@ -319,12 +320,23 @@ async fn bench_bbt_latency() {
             if TPS_PRESSURE != u64::MAX {
                 tokio::time::sleep(std::time::Duration::from_secs_f64(1.0 / TPS_PRESSURE as f64)).await;
             }
-            if last_log_time.elapsed() > Duration::from_secs(1) {
-                let mempool_size = cc.get_info().await.unwrap().mempool_size;
+            if last_log_time.elapsed() > Duration::from_millis(500) {
+                let mut mempool_size = cc.get_info().await.unwrap().mempool_size;
                 log_submitted_txs_count(i as u64);
-                log_mempool_size(mempool_size);
+                log_mempool_size(mempool_size, i as u64);
                 kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
                 last_log_time = Instant::now();
+
+                let mut j = 0;
+                while mempool_size > MEMPOOL_TARGET {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    mempool_size = cc.get_info().await.unwrap().mempool_size;
+                    log_mempool_size(mempool_size, i as u64);
+                    if j % 10 == 0 {
+                        kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
+                        j += 1;
+                    }
+                }
             }
             match tx_sender.send((i, tx)).await {
                 Ok(_) => {}
@@ -339,13 +351,13 @@ async fn bench_bbt_latency() {
 
         kaspa_core::warn!("Tx sender task, waiting for mempool to drain..");
         loop {
-            let mempool_size = cc.get_info().await.unwrap().mempool_size;
-            log_mempool_size(mempool_size);
-            kaspa_core::info!("Mempool size: {:#?}", mempool_size);
-            if mempool_size == 0 {
+            if !exec.load(Ordering::Relaxed) {
                 break;
             }
-            if !exec.load(Ordering::Relaxed) {
+            let mempool_size = cc.get_info().await.unwrap().mempool_size;
+            log_mempool_size(mempool_size, TX_COUNT as u64);
+            kaspa_core::info!("Mempool size: {:#?}", mempool_size);
+            if mempool_size == 0 || (TX_COUNT as u64 > MEMPOOL_TARGET && mempool_size < MEMPOOL_TARGET) {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -393,7 +405,7 @@ async fn bench_bbt_latency() {
     let f = std::fs::File::create("perflogs/mempool.txt").unwrap();
     let mut f = std::io::BufWriter::new(f);
     for entry in MEMPOOL_SIZE_LOG.lock().iter() {
-        writeln!(f, "{}, {}", entry.0, entry.1).unwrap();
+        writeln!(f, "{}, {}, {}, {}", entry.0, entry.1, entry.2, entry.3).unwrap();
     }
     f.flush().unwrap();
 }
