@@ -155,19 +155,19 @@ async fn bench_bbt_latency() {
     kaspa_core::log::try_init_logger("info,kaspa_core::time=trace");
 
     // Constants
-    const BLOCK_COUNT: usize = 20_000;
+    const BLOCK_COUNT: usize = usize::MAX;
 
     // const TX_COUNT: usize = 200_000;
     // const TX_LEVEL_WIDTH: usize = 5_000;
     // const TPS_PRESSURE: u64 = 2000;
 
-    const MEMPOOL_TARGET: u64 = 60_000;
-    const TX_COUNT: usize = 200_000;
-    const TX_LEVEL_WIDTH: usize = 1_000;
+    const MEMPOOL_TARGET: u64 = 600_000;
+    const TX_COUNT: usize = 1_200_000;
+    const TX_LEVEL_WIDTH: usize = 5_000;
     const TPS_PRESSURE: u64 = u64::MAX;
 
     const SUBMIT_BLOCK_CLIENTS: usize = 20;
-    const SUBMIT_TX_CLIENTS: usize = 1;
+    const SUBMIT_TX_CLIENTS: usize = 2;
 
     if TX_COUNT < TX_LEVEL_WIDTH {
         panic!()
