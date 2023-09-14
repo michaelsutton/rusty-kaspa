@@ -15,7 +15,10 @@ use kaspa_consensus_core::{
         utxo_diff::UtxoDiff,
     },
 };
-use kaspa_core::{debug, info};
+use kaspa_core::{
+    debug, info,
+    time::{log_mempool_size, log_submitted_txs_count, BBT_TIMING_LOG, MEMPOOL_SIZE_LOG, SB_TIMING_LOG, SUBMIT_TXS_LOG},
+};
 use kaspa_notify::{
     listener::ListenerId,
     notifier::Notify,
@@ -33,11 +36,12 @@ use std::{
     cmp::max,
     collections::{hash_map::Entry::Occupied, HashMap, HashSet},
     fmt::Debug,
+    io::Write,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::join;
 
@@ -117,7 +121,7 @@ fn generate_tx_dag(
         utxoset.remove_collection(&utxo_diff.remove);
         utxoset.add_collection(&utxo_diff.add);
 
-        if i % 100 == 0 {
+        if i % (target_levels / 10).max(1) == 0 {
             info!("Generated {} txs", txs.len());
         }
     }
@@ -152,10 +156,21 @@ async fn bench_bbt_latency() {
 
     // Constants
     const BLOCK_COUNT: usize = 20_000;
+
+    // const TX_COUNT: usize = 200_000;
+    // const TX_LEVEL_WIDTH: usize = 5_000;
+    // const TPS_PRESSURE: u64 = 2000;
+
     const TX_COUNT: usize = 600_000;
-    const TX_LEVEL_WIDTH: usize = 1000;
+    const TX_LEVEL_WIDTH: usize = 1_000;
+    const TPS_PRESSURE: u64 = u64::MAX;
+
     const SUBMIT_BLOCK_CLIENTS: usize = 20;
     const SUBMIT_TX_CLIENTS: usize = 1;
+
+    if TX_COUNT < TX_LEVEL_WIDTH {
+        panic!()
+    }
 
     /*
     Logic:
@@ -220,6 +235,7 @@ async fn bench_bbt_latency() {
 
     let submit_block_pool = daemon
         .new_client_pool(SUBMIT_BLOCK_CLIENTS, 100, |c, block| async move {
+            let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("sb");
             let response = c.submit_block(block, false).await.unwrap();
             assert_eq!(response.report, kaspa_rpc_core::SubmitBlockReport::Success);
             false
@@ -251,7 +267,7 @@ async fn bench_bbt_latency() {
                     while notification_rx.try_recv().is_ok() {
                         // Drain the channel
                     }
-                    // let _sw = Stopwatch::<500>::with_threshold("get_block_template");
+                    let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("bbt");
                     *current_template.lock() = cc.get_block_template(pay_address.clone(), vec![]).await.unwrap();
                 }
                 _ => panic!(),
@@ -297,8 +313,19 @@ async fn bench_bbt_latency() {
     let tx_sender = submit_tx_pool.sender();
     let exec = executing.clone();
     let cc = client.clone();
+    let mut last_log_time = Instant::now() - Duration::from_secs(5);
     let tx_sender_task = tokio::spawn(async move {
         for (i, tx) in txs.into_iter().enumerate() {
+            if TPS_PRESSURE != u64::MAX {
+                tokio::time::sleep(std::time::Duration::from_secs_f64(1.0 / TPS_PRESSURE as f64)).await;
+            }
+            if last_log_time.elapsed() > Duration::from_secs(1) {
+                let mempool_size = cc.get_info().await.unwrap().mempool_size;
+                log_submitted_txs_count(i as u64);
+                log_mempool_size(mempool_size);
+                kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
+                last_log_time = Instant::now();
+            }
             match tx_sender.send((i, tx)).await {
                 Ok(_) => {}
                 Err(_) => {
@@ -311,7 +338,13 @@ async fn bench_bbt_latency() {
         }
 
         kaspa_core::warn!("Tx sender task, waiting for mempool to drain..");
-        while cc.get_info().await.unwrap().mempool_size > 0 {
+        loop {
+            let mempool_size = cc.get_info().await.unwrap().mempool_size;
+            log_mempool_size(mempool_size);
+            kaspa_core::info!("Mempool size: {:#?}", mempool_size);
+            if mempool_size == 0 {
+                break;
+            }
             if !exec.load(Ordering::Relaxed) {
                 break;
             }
@@ -335,4 +368,32 @@ async fn bench_bbt_latency() {
     client.disconnect().await.unwrap();
     drop(client);
     daemon.shutdown();
+
+    let f = std::fs::File::create("perflogs/sb.txt").unwrap();
+    let mut f = std::io::BufWriter::new(f);
+    for entry in SB_TIMING_LOG.lock().iter() {
+        writeln!(f, "{}, {}", entry.0, entry.1).unwrap();
+    }
+    f.flush().unwrap();
+
+    let f = std::fs::File::create("perflogs/bbt.txt").unwrap();
+    let mut f = std::io::BufWriter::new(f);
+    for entry in BBT_TIMING_LOG.lock().iter() {
+        writeln!(f, "{}, {}", entry.0, entry.1).unwrap();
+    }
+    f.flush().unwrap();
+
+    let f = std::fs::File::create("perflogs/tx.txt").unwrap();
+    let mut f = std::io::BufWriter::new(f);
+    for entry in SUBMIT_TXS_LOG.lock().iter() {
+        writeln!(f, "{}, {}", entry.0, entry.1).unwrap();
+    }
+    f.flush().unwrap();
+
+    let f = std::fs::File::create("perflogs/mempool.txt").unwrap();
+    let mut f = std::io::BufWriter::new(f);
+    for entry in MEMPOOL_SIZE_LOG.lock().iter() {
+        writeln!(f, "{}, {}", entry.0, entry.1).unwrap();
+    }
+    f.flush().unwrap();
 }

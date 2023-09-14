@@ -9,6 +9,8 @@ license.workspace = true
 
 [dependencies]
 futures-util.workspace = true
+parking_lot.workspace = true
+once_cell.workspace = true
 wasm-bindgen.workspace = true
 log.workspace = true
 cfg-if.workspace = true
