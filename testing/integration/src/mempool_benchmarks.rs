@@ -66,8 +66,8 @@ fn estimated_mass(num_inputs: usize, num_outputs: u64) -> u64 {
     200 + 34 * num_outputs + 1000 * (num_inputs as u64)
 }
 
-const EXPAND_FACTOR: u64 = 2;
-const CONTRACT_FACTOR: u64 = 2;
+const EXPAND_FACTOR: u64 = 1;
+const CONTRACT_FACTOR: u64 = 1;
 
 /// Builds a TX DAG based on the initial UTXO set and on constant params
 fn generate_tx_dag(
@@ -157,8 +157,8 @@ async fn bench_bbt_latency() {
     // Constants
     const BLOCK_COUNT: usize = usize::MAX;
 
-    const MEMPOOL_TARGET: u64 = 10_000;
-    const TX_COUNT: usize = 100_000;
+    const MEMPOOL_TARGET: u64 = 600_000;
+    const TX_COUNT: usize = 1_000_000;
     const TX_LEVEL_WIDTH: usize = 20_000;
     const TPS_PRESSURE: u64 = u64::MAX;
 
