@@ -257,6 +257,7 @@ async fn bench_bbt_latency() {
     let cc = bbt_client.clone();
     let exec = executing.clone();
     let notification_rx = receiver.clone();
+    let pac = pay_address.clone();
     let miner_receiver_task = tokio::spawn(async move {
         while let Ok(notification) = notification_rx.recv().await {
             match notification {
@@ -265,7 +266,7 @@ async fn bench_bbt_latency() {
                         // Drain the channel
                     }
                     let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("bbt");
-                    *current_template.lock() = cc.get_block_template(pay_address.clone(), vec![]).await.unwrap();
+                    *current_template.lock() = cc.get_block_template(pac.clone(), vec![]).await.unwrap();
                 }
                 _ => panic!(),
             }
@@ -279,6 +280,7 @@ async fn bench_bbt_latency() {
 
     let block_sender = submit_block_pool.sender();
     let exec = executing.clone();
+    let cc = Arc::new(bbt_client.clone());
     let miner_loop_task = tokio::spawn(async move {
         for i in 0..BLOCK_COUNT {
             // Simulate mining time
@@ -289,6 +291,15 @@ async fn bench_bbt_latency() {
             let mut block = current_template_consume.lock().block.clone();
             // Use index as nonce to avoid duplicate blocks
             block.header.nonce = i as u64;
+
+            let ctc = current_template_consume.clone();
+            let ccc = cc.clone();
+            let pac = pay_address.clone();
+            tokio::spawn(async move {
+                let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("bbt");
+                // We used the current template so let's refetch a new template with new txs
+                *ctc.lock() = ccc.get_block_template(pac, vec![]).await.unwrap();
+            });
 
             let bs = block_sender.clone();
             tokio::spawn(async move {
@@ -321,20 +332,14 @@ async fn bench_bbt_latency() {
                 let mut mempool_size = cc.get_info().await.unwrap().mempool_size;
                 log_submitted_txs_count(i as u64);
                 log_mempool_size(mempool_size, i as u64);
-                kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
                 last_log_time = Instant::now();
 
-                if mempool_size > (MEMPOOL_TARGET as f32 * 1.001) as u64 {
+                if mempool_size > (MEMPOOL_TARGET as f32 * 1.05) as u64 {
                     tps_pressure = TPS_PRESSURE;
-                    let mut j = 0;
                     while mempool_size > MEMPOOL_TARGET {
                         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                         mempool_size = cc.get_info().await.unwrap().mempool_size;
                         log_mempool_size(mempool_size, i as u64);
-                        if j % 10 == 0 {
-                            kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
-                        }
-                        j += 1;
                     }
                 }
             }

@@ -183,6 +183,7 @@ impl TransactionsPool {
 
         self.ready_transactions
             .iter()
+            .take(100_000)
             .map(|id| CandidateTransaction::from_mutable(&self.all_transactions.get(id).unwrap().mtx))
             .collect()
     }

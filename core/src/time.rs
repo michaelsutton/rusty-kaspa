@@ -22,17 +22,21 @@ pub fn log_submitted_txs_count(count: u64) {
 pub fn log_mempool_size(mempool_size: u64, submitted_txs: u64) {
     let mut v = MEMPOOL_SIZE_LOG.lock();
     let now = unix_now();
-    match v.iter().rev().find(|e| now > e.0 + 5000) {
+    let entry = match v.iter().rev().find(|e| now > e.0 + 10000) {
         Some(prev) => {
             let time_delta = now as i64 - prev.0 as i64;
             let prev_mempool = prev.1 as i64;
             let current_mempool = mempool_size as i64;
             let submit_delta = submitted_txs as i64 - prev.2 as i64;
             let rate = (prev_mempool - (current_mempool - submit_delta)) as f64 / (time_delta as f64 / 1000.0);
-            v.push((now, mempool_size, submitted_txs, rate.clamp(0.0, 100_000.0)));
+            (now, mempool_size, submitted_txs, rate.clamp(0.0, 100_000.0))
         }
-        None => v.push((now, mempool_size, submitted_txs, 0.0)),
+        None => (now, mempool_size, submitted_txs, 0.0),
+    };
+    if v.len() % 10 == 0 {
+        kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}, rate: {}", mempool_size, submitted_txs, entry.3);
     }
+    v.push(entry);
 }
 
 /// Stopwatch which reports on drop if the timed operation passed the threshold `TR` in milliseconds
