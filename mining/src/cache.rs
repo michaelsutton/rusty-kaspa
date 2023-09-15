@@ -17,13 +17,13 @@ pub(crate) struct Inner {
     block_template: Option<Arc<BlockTemplate>>,
 
     /// Duration in milliseconds after which the cached data expires
-    cache_lifetime: u64,
+    _cache_lifetime: u64,
 }
 
 impl Inner {
     pub(crate) fn new(cache_lifetime: Option<u64>) -> Self {
         let cache_lifetime = cache_lifetime.unwrap_or(DEFAULT_CACHE_LIFETIME);
-        Self { last_update_time: 0, block_template: None, cache_lifetime }
+        Self { last_update_time: 0, block_template: None, _cache_lifetime: cache_lifetime }
     }
 
     fn clear(&mut self) {
@@ -33,13 +33,14 @@ impl Inner {
     }
 
     pub(crate) fn get_immutable_cached_template(&self) -> Option<Arc<BlockTemplate>> {
-        let now = unix_now();
-        // We verify that `now > last update` in order to avoid theoretic clock change bugs
-        if now < self.last_update_time || now - self.last_update_time > self.cache_lifetime {
-            None
-        } else {
-            Some(self.block_template.as_ref().expect("last_update_time would be 0").clone())
-        }
+        None
+        // let now = unix_now();
+        // // We verify that `now > last update` in order to avoid theoretic clock change bugs
+        // if now < self.last_update_time || now - self.last_update_time > self.cache_lifetime {
+        //     None
+        // } else {
+        //     Some(self.block_template.as_ref().expect("last_update_time would be 0").clone())
+        // }
     }
 
     pub(crate) fn set_immutable_cached_template(&mut self, block_template: BlockTemplate) -> Arc<BlockTemplate> {
