@@ -157,13 +157,9 @@ async fn bench_bbt_latency() {
     // Constants
     const BLOCK_COUNT: usize = usize::MAX;
 
-    // const TX_COUNT: usize = 200_000;
-    // const TX_LEVEL_WIDTH: usize = 5_000;
-    // const TPS_PRESSURE: u64 = 2000;
-
-    const MEMPOOL_TARGET: u64 = 600_000;
-    const TX_COUNT: usize = 1_200_000;
-    const TX_LEVEL_WIDTH: usize = 5_000;
+    const MEMPOOL_TARGET: u64 = 10_000;
+    const TX_COUNT: usize = 100_000;
+    const TX_LEVEL_WIDTH: usize = 20_000;
     const TPS_PRESSURE: u64 = u64::MAX;
 
     const SUBMIT_BLOCK_CLIENTS: usize = 20;
@@ -314,11 +310,12 @@ async fn bench_bbt_latency() {
     let tx_sender = submit_tx_pool.sender();
     let exec = executing.clone();
     let cc = client.clone();
+    let mut tps_pressure = if MEMPOOL_TARGET < u64::MAX { u64::MAX } else { TPS_PRESSURE };
     let mut last_log_time = Instant::now() - Duration::from_secs(5);
     let tx_sender_task = tokio::spawn(async move {
         for (i, tx) in txs.into_iter().enumerate() {
-            if TPS_PRESSURE != u64::MAX {
-                tokio::time::sleep(std::time::Duration::from_secs_f64(1.0 / TPS_PRESSURE as f64)).await;
+            if tps_pressure != u64::MAX {
+                tokio::time::sleep(std::time::Duration::from_secs_f64(1.0 / tps_pressure as f64)).await;
             }
             if last_log_time.elapsed() > Duration::from_millis(500) {
                 let mut mempool_size = cc.get_info().await.unwrap().mempool_size;
@@ -327,13 +324,16 @@ async fn bench_bbt_latency() {
                 kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
                 last_log_time = Instant::now();
 
-                let mut j = 0;
-                while mempool_size > MEMPOOL_TARGET {
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    mempool_size = cc.get_info().await.unwrap().mempool_size;
-                    log_mempool_size(mempool_size, i as u64);
-                    if j % 10 == 0 {
-                        kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
+                if mempool_size > (MEMPOOL_TARGET as f32 * 1.001) as u64 {
+                    tps_pressure = TPS_PRESSURE;
+                    let mut j = 0;
+                    while mempool_size > MEMPOOL_TARGET {
+                        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                        mempool_size = cc.get_info().await.unwrap().mempool_size;
+                        log_mempool_size(mempool_size, i as u64);
+                        if j % 10 == 0 {
+                            kaspa_core::info!("Mempool size: {:#?}, txs submitted: {}", mempool_size, i);
+                        }
                         j += 1;
                     }
                 }
