@@ -158,7 +158,7 @@ async fn bench_bbt_latency() {
     const BLOCK_COUNT: usize = usize::MAX;
 
     const MEMPOOL_TARGET: u64 = 600_000;
-    const TX_COUNT: usize = 1_200_000;
+    const TX_COUNT: usize = 1_400_000;
     const TX_LEVEL_WIDTH: usize = 20_000;
     const TPS_PRESSURE: u64 = u64::MAX;
 
