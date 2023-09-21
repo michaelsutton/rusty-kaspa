@@ -1,7 +1,7 @@
 use crate::{consensus::test_consensus::TestConsensus, model::services::reachability::ReachabilityService};
 use kaspa_consensus_core::{
     api::ConsensusApi,
-    block::{Block, BlockTemplate, MutableBlock, TemplateTransactionSelector},
+    block::{Block, BlockTemplate, MutableBlock, TemplateBuildMode, TemplateTransactionSelector},
     blockhash,
     blockstatus::BlockStatus,
     coinbase::MinerData,
@@ -29,6 +29,10 @@ impl TemplateTransactionSelector for OnetimeTxSelector {
 
     fn reject_selection(&mut self, _tx_id: kaspa_consensus_core::tx::TransactionId) {
         unimplemented!()
+    }
+
+    fn is_successful(&self) -> bool {
+        true
     }
 }
 
@@ -100,7 +104,11 @@ impl TestContext {
     pub fn build_block_template(&self, nonce: u64, timestamp: u64) -> BlockTemplate {
         let mut t = self
             .consensus
-            .build_block_template(self.miner_data.clone(), Box::new(OnetimeTxSelector::new(Default::default())))
+            .build_block_template(
+                self.miner_data.clone(),
+                Box::new(OnetimeTxSelector::new(Default::default())),
+                TemplateBuildMode::Standard,
+            )
             .unwrap();
         t.block.header.timestamp = timestamp;
         t.block.header.nonce = nonce;
