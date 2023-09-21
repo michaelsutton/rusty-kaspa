@@ -13,7 +13,7 @@ use self::{
 };
 use kaspa_consensus_core::tx::{MutableTransaction, TransactionId};
 use kaspa_core::{
-    info,
+    debug,
     time::{unix_now, Stopwatch},
 };
 use std::{collections::hash_map::Entry, sync::Arc};
@@ -171,7 +171,7 @@ impl Mempool {
         const LOG_STATS_REPORT_INTERVAL_MILLISECONDS: u64 = 2000;
         let now = unix_now();
         if now >= self.last_stat_report_time + LOG_STATS_REPORT_INTERVAL_MILLISECONDS {
-            info!(
+            debug!(
                 "Mempool stats: {} txs, {} orphans, {} accepted",
                 self.transaction_pool.len(),
                 self.orphan_pool.len(),

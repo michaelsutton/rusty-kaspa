@@ -87,7 +87,7 @@ impl BlockTemplateBuilder {
         miner_data: &MinerData,
         transactions: Vec<CandidateTransaction>,
     ) -> BuilderResult<BlockTemplate> {
-        let _sw = Stopwatch::<20>::with_threshold("build_block_template op");
+        let _sw = Stopwatch::<100>::with_threshold("build_block_template op");
         debug!("Considering {} transactions for a new block template", transactions.len());
         let selector = Box::new(TransactionsSelector::new(self.policy.clone(), transactions));
         Ok(consensus.build_block_template(miner_data.clone(), selector)?)

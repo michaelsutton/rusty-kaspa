@@ -329,7 +329,7 @@ async fn bench_bbt_latency() {
             if tps_pressure != u64::MAX {
                 tokio::time::sleep(std::time::Duration::from_secs_f64(1.0 / tps_pressure as f64)).await;
             }
-            if last_log_time.elapsed() > Duration::from_millis(500) {
+            if last_log_time.elapsed() > Duration::from_millis(200) {
                 let mut mempool_size = cc.get_info().await.unwrap().mempool_size;
                 log_submitted_txs_count(i as u64);
                 log_mempool_size(mempool_size, i as u64);
@@ -338,7 +338,7 @@ async fn bench_bbt_latency() {
                 if mempool_size > (MEMPOOL_TARGET as f32 * 1.05) as u64 {
                     tps_pressure = TPS_PRESSURE;
                     while mempool_size > MEMPOOL_TARGET {
-                        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                         mempool_size = cc.get_info().await.unwrap().mempool_size;
                         log_mempool_size(mempool_size, i as u64);
                     }

@@ -83,7 +83,7 @@ impl MiningManager {
         // mempool.BlockCandidateTransactions and mempool.RemoveTransactions here.
         // We remove recursion seen in blockTemplateBuilder.BuildBlockTemplate here.
         debug!("Building a new block template...");
-        let _swo = Stopwatch::<22>::with_threshold("build_block_template full loop");
+        let _swo = Stopwatch::<100>::with_threshold("build_block_template full loop");
         let mut attempts: u64 = 0;
         loop {
             attempts += 1;
