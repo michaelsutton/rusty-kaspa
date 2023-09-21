@@ -134,7 +134,7 @@ impl Mempool {
     }
 
     pub(crate) fn block_candidate_transactions(&self) -> Vec<CandidateTransaction> {
-        let _sw = Stopwatch::<10>::with_threshold("block_candidate_transactions op");
+        let _sw = Stopwatch::<100>::with_threshold("block_candidate_transactions op");
         self.transaction_pool.all_ready_transactions()
     }
 
