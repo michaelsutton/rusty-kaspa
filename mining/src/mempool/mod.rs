@@ -1,6 +1,9 @@
-use crate::model::{
-    candidate_tx::CandidateTransaction,
-    owner_txs::{GroupedOwnerTransactions, ScriptPublicKeySet},
+use crate::{
+    model::{
+        candidate_tx::CandidateTransaction,
+        owner_txs::{GroupedOwnerTransactions, ScriptPublicKeySet},
+    },
+    MiningCounters,
 };
 
 use self::{
@@ -46,15 +49,15 @@ pub(crate) struct Mempool {
     orphan_pool: OrphanPool,
     accepted_transactions: AcceptedTransactions,
     last_stat_report_time: u64,
+    counters: Arc<MiningCounters>,
 }
 
 impl Mempool {
-    pub(crate) fn new(config: Config) -> Self {
-        let config = Arc::new(config);
+    pub(crate) fn new(config: Arc<Config>, counters: Arc<MiningCounters>) -> Self {
         let transaction_pool = TransactionsPool::new(config.clone());
         let orphan_pool = OrphanPool::new(config.clone());
         let accepted_transactions = AcceptedTransactions::new(config.clone());
-        Self { config, transaction_pool, orphan_pool, accepted_transactions, last_stat_report_time: unix_now() }
+        Self { config, transaction_pool, orphan_pool, accepted_transactions, last_stat_report_time: unix_now(), counters }
     }
 
     pub(crate) fn get_transaction(
@@ -88,14 +91,18 @@ impl Mempool {
         include_transaction_pool: bool,
         include_orphan_pool: bool,
     ) -> (Vec<MutableTransaction>, Vec<MutableTransaction>) {
-        let mut transactions = vec![];
-        let mut orphans = vec![];
-        if include_transaction_pool {
-            transactions = self.transaction_pool.get_all_transactions()
-        }
-        if include_orphan_pool {
-            orphans = self.orphan_pool.get_all_transactions()
-        }
+        let transactions = if include_transaction_pool { self.transaction_pool.get_all_transactions() } else { vec![] };
+        let orphans = if include_orphan_pool { self.orphan_pool.get_all_transactions() } else { vec![] };
+        (transactions, orphans)
+    }
+
+    pub(crate) fn get_all_transaction_ids(
+        &self,
+        include_transaction_pool: bool,
+        include_orphan_pool: bool,
+    ) -> (Vec<TransactionId>, Vec<TransactionId>) {
+        let transactions = if include_transaction_pool { self.transaction_pool.get_all_transaction_ids() } else { vec![] };
+        let orphans = if include_orphan_pool { self.orphan_pool.get_all_transaction_ids() } else { vec![] };
         (transactions, orphans)
     }
 
@@ -127,17 +134,13 @@ impl Mempool {
     }
 
     pub(crate) fn block_candidate_transactions(&self) -> Vec<CandidateTransaction> {
-        let _sw = Stopwatch::<120>::with_threshold("block_candidate_transactions op");
+        let _sw = Stopwatch::<10>::with_threshold("block_candidate_transactions op");
         self.transaction_pool.all_ready_transactions()
     }
 
-    pub(crate) fn all_transactions_with_priority(&self, priority: Priority) -> Vec<MutableTransaction> {
-        let _sw = Stopwatch::<100>::with_threshold("all_transactions_with_priority op");
-        self.transaction_pool.all_transactions_with_priority(priority)
-    }
-
-    pub(crate) fn has_transactions_with_priority(&self, priority: Priority) -> bool {
-        self.transaction_pool.has_transactions_with_priority(priority)
+    pub(crate) fn all_transaction_ids_with_priority(&self, priority: Priority) -> Vec<TransactionId> {
+        let _sw = Stopwatch::<15>::with_threshold("all_transaction_ids_with_priority op");
+        self.transaction_pool.all_transaction_ids_with_priority(priority)
     }
 
     pub(crate) fn update_revalidated_transaction(&mut self, transaction: MutableTransaction) -> bool {
