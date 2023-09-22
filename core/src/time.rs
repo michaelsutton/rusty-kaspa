@@ -9,6 +9,8 @@ pub fn unix_now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
 }
 
+pub static HB_TIMING_LOG: Lazy<Mutex<Vec<(u64, u64)>>> = Lazy::new(|| Mutex::new(Vec::with_capacity(10_000_000)));
+pub static VB_TIMING_LOG: Lazy<Mutex<Vec<(u64, u64)>>> = Lazy::new(|| Mutex::new(Vec::with_capacity(10_000_000)));
 pub static SB_TIMING_LOG: Lazy<Mutex<Vec<(u64, u64)>>> = Lazy::new(|| Mutex::new(Vec::with_capacity(10_000_000)));
 pub static BBT_TIMING_LOG: Lazy<Mutex<Vec<(u64, u64)>>> = Lazy::new(|| Mutex::new(Vec::with_capacity(10_000_000)));
 pub static SUBMIT_TXS_LOG: Lazy<Mutex<Vec<(u64, u64)>>> = Lazy::new(|| Mutex::new(Vec::with_capacity(10_000_000)));
@@ -67,9 +69,13 @@ impl<const TR: u64> Drop for Stopwatch<TR> {
         match self.name {
             "bbt" => BBT_TIMING_LOG.lock().push((unix_now(), elapsed.as_millis() as u64)),
             "sb" => SB_TIMING_LOG.lock().push((unix_now(), elapsed.as_millis() as u64)),
+            "vb" => VB_TIMING_LOG.lock().push((unix_now(), elapsed.as_millis() as u64)),
+            "hb" => HB_TIMING_LOG.lock().push((unix_now(), elapsed.as_millis() as u64)),
             _ => {}
         }
-        if elapsed > Duration::from_millis(TR) {
+        if elapsed > Duration::from_millis(2000) {
+            kaspa_core::debug!("[{}] Extreme abnormal time: {:#?}", self.name, elapsed);
+        } else if elapsed > Duration::from_millis(TR) {
             kaspa_core::trace!("[{}] Abnormal time: {:#?}", self.name, elapsed);
         }
     }

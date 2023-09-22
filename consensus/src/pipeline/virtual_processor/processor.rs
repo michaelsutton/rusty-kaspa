@@ -243,7 +243,9 @@ impl VirtualStateProcessor {
             let messages: Vec<BlockProcessingMessage> = std::iter::once(msg).chain(self.receiver.try_iter()).collect();
             trace!("virtual processor received {} tasks", messages.len());
 
+            let _sw = kaspa_core::time::Stopwatch::<1000>::with_threshold("hb");
             self.resolve_virtual();
+            drop(_sw);
 
             let statuses_read = self.statuses_store.read();
             for msg in messages {

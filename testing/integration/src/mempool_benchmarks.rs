@@ -17,7 +17,10 @@ use kaspa_consensus_core::{
 };
 use kaspa_core::{
     debug, info,
-    time::{log_mempool_size, log_submitted_txs_count, BBT_TIMING_LOG, MEMPOOL_SIZE_LOG, SB_TIMING_LOG, SUBMIT_TXS_LOG},
+    time::{
+        log_mempool_size, log_submitted_txs_count, BBT_TIMING_LOG, HB_TIMING_LOG, MEMPOOL_SIZE_LOG, SB_TIMING_LOG, SUBMIT_TXS_LOG,
+        VB_TIMING_LOG,
+    },
 };
 use kaspa_notify::{
     listener::ListenerId,
@@ -152,14 +155,14 @@ fn verify_tx_dag(initial_utxoset: &UtxoCollection, txs: &Vec<Arc<Transaction>>) 
 #[ignore = "bmk"]
 async fn bench_bbt_latency() {
     kaspa_core::panic::configure_panic();
-    kaspa_core::log::try_init_logger("info,kaspa_core::time=trace");
+    kaspa_core::log::try_init_logger("info,kaspa_core::time=debug");
 
     // Constants
     const BLOCK_COUNT: usize = usize::MAX;
 
     const MEMPOOL_TARGET: u64 = 600_000;
-    const TX_COUNT: usize = 1_400_000;
-    const TX_LEVEL_WIDTH: usize = 20_000;
+    const TX_COUNT: usize = 2_400_000;
+    const TX_LEVEL_WIDTH: usize = 200_000;
     const TPS_PRESSURE: u64 = u64::MAX;
 
     const SUBMIT_BLOCK_CLIENTS: usize = 20;
@@ -266,7 +269,7 @@ async fn bench_bbt_latency() {
                     while notification_rx.try_recv().is_ok() {
                         // Drain the channel
                     }
-                    let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("bbt");
+                    // let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("bbt");
                     *current_template.lock() = cc.get_block_template(pac.clone(), vec![]).await.unwrap();
                 }
                 _ => panic!(),
@@ -297,7 +300,7 @@ async fn bench_bbt_latency() {
             let ccc = cc.clone();
             let pac = pay_address.clone();
             tokio::spawn(async move {
-                let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("bbt");
+                // let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("bbt");
                 // We used the current template so let's refetch a new template with new txs
                 *ctc.lock() = ccc.get_block_template(pac, vec![]).await.unwrap();
             });
@@ -386,6 +389,20 @@ async fn bench_bbt_latency() {
     client.disconnect().await.unwrap();
     drop(client);
     daemon.shutdown();
+
+    let f = std::fs::File::create("perflogs/hb.txt").unwrap();
+    let mut f = std::io::BufWriter::new(f);
+    for entry in HB_TIMING_LOG.lock().iter() {
+        writeln!(f, "{}, {}", entry.0, entry.1).unwrap();
+    }
+    f.flush().unwrap();
+
+    let f = std::fs::File::create("perflogs/vb.txt").unwrap();
+    let mut f = std::io::BufWriter::new(f);
+    for entry in VB_TIMING_LOG.lock().iter() {
+        writeln!(f, "{}, {}", entry.0, entry.1).unwrap();
+    }
+    f.flush().unwrap();
 
     let f = std::fs::File::create("perflogs/sb.txt").unwrap();
     let mut f = std::io::BufWriter::new(f);
