@@ -322,12 +322,10 @@ impl FlowContext {
             return Err(RuleError::NoTransactions)?;
         }
         let hash = block.hash();
-        let _sw = kaspa_core::time::Stopwatch::<500>::with_threshold("vb");
         if let Err(err) = self.consensus().session().await.validate_and_insert_block(block.clone()).await {
             warn!("Validation failed for block {}: {}", hash, err);
             return Err(err)?;
         }
-        drop(_sw);
         self.log_block_acceptance(hash, BlockSource::Submit);
         self.on_new_block_template().await?;
         self.on_new_block(consensus, block).await?;

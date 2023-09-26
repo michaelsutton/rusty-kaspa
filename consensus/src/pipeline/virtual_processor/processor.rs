@@ -243,9 +243,7 @@ impl VirtualStateProcessor {
             let messages: Vec<BlockProcessingMessage> = std::iter::once(msg).chain(self.receiver.try_iter()).collect();
             trace!("virtual processor received {} tasks", messages.len());
 
-            let _sw = kaspa_core::time::Stopwatch::<1000>::with_threshold("hb");
             self.resolve_virtual();
-            drop(_sw);
 
             let statuses_read = self.statuses_store.read();
             for msg in messages {
@@ -273,10 +271,17 @@ impl VirtualStateProcessor {
         let prev_sink = prev_state.ghostdag_data.selected_parent;
         let mut accumulated_diff = prev_state.utxo_diff.clone().to_reversed();
 
+        let _sw = kaspa_core::time::Stopwatch::<1000>::with_threshold("vb");
         let (new_sink, virtual_parent_candidates) =
             self.sink_search_algorithm(&virtual_read, &mut accumulated_diff, prev_sink, tips, finality_point, pruning_point);
         let (virtual_parents, virtual_ghostdag_data) = self.pick_virtual_parents(new_sink, virtual_parent_candidates, pruning_point);
         assert_eq!(virtual_ghostdag_data.selected_parent, new_sink);
+        let elapsed = _sw.elapsed();
+        std::mem::forget(_sw);
+        let approx_processed_blocks =
+            (virtual_ghostdag_data.blue_score as i64 - prev_state.ghostdag_data.blue_score as i64).max(1) as u64;
+        kaspa_core::time::VB_TIMING_LOG.lock().push((unix_now(), elapsed.as_millis() as u64 / approx_processed_blocks));
+        kaspa_core::time::HB_TIMING_LOG.lock().push((unix_now(), approx_processed_blocks));
 
         let sink_multiset = self.utxo_multisets_store.get(new_sink).unwrap();
         let chain_path = self.dag_traversal_manager.calculate_chain_path(prev_sink, new_sink);

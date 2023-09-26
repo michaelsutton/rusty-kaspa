@@ -73,7 +73,7 @@ impl<const TR: u64> Drop for Stopwatch<TR> {
             "hb" => HB_TIMING_LOG.lock().push((unix_now(), elapsed.as_millis() as u64)),
             _ => {}
         }
-        if elapsed > Duration::from_millis(2000) {
+        if elapsed > Duration::from_millis(4000) {
             kaspa_core::debug!("[{}] Extreme abnormal time: {:#?}", self.name, elapsed);
         } else if elapsed > Duration::from_millis(TR) {
             kaspa_core::trace!("[{}] Abnormal time: {:#?}", self.name, elapsed);
