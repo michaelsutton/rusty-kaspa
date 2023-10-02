@@ -56,6 +56,7 @@ use kaspa_txscript::{extract_script_pub_key_address, pay_to_address_script};
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
 use kaspa_utxoindex::api::UtxoIndexProxy;
 use kaspa_wrpc_core::ServerCounters as WrpcServerCounters;
+use std::sync::Weak;
 use std::{
     iter::once,
     sync::{atomic::Ordering, Arc},
@@ -90,7 +91,8 @@ pub struct RpcCoreService {
     consensus_converter: Arc<ConsensusConverter>,
     index_converter: Arc<IndexConverter>,
     protocol_converter: Arc<ProtocolConverter>,
-    core: Arc<Core>,
+    // We avoid holding core strongly to avoid a ref cycle since this service is indirectly held by core
+    core: Weak<Core>,
     processing_counters: Arc<ProcessingCounters>,
     wrpc_borsh_counters: Arc<WrpcServerCounters>,
     wrpc_json_counters: Arc<WrpcServerCounters>,
@@ -110,7 +112,7 @@ impl RpcCoreService {
         flow_context: Arc<FlowContext>,
         utxoindex: Option<UtxoIndexProxy>,
         config: Arc<Config>,
-        core: Arc<Core>,
+        core: Weak<Core>,
         processing_counters: Arc<ProcessingCounters>,
         wrpc_borsh_counters: Arc<WrpcServerCounters>,
         wrpc_json_counters: Arc<WrpcServerCounters>,
@@ -629,12 +631,13 @@ impl RpcApi for RpcCoreService {
         }
         warn!("Shutdown RPC command was called, shutting down in 1 second...");
 
-        // Wait a second before shutting down, to allow time to return the response to the caller
-        let core = self.core.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            core.shutdown();
-        });
+        if let Some(core) = self.core.upgrade() {
+            tokio::spawn(async move {
+                // Wait a second before shutting down, to allow time to return the response to the caller
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                core.shutdown();
+            });
+        }
 
         Ok(ShutdownResponse {})
     }

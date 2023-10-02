@@ -349,7 +349,7 @@ do you confirm? (answer y/n or pass --yes to the Kaspad command line to confirm 
         flow_context,
         index_service.as_ref().map(|x| x.utxoindex().unwrap()),
         config,
-        core.clone(),
+        Arc::downgrade(&core),
         processing_counters,
         wrpc_borsh_counters.clone(),
         wrpc_json_counters.clone(),
