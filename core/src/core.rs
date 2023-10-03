@@ -54,6 +54,8 @@ impl Core {
             }
         }
 
+        // Drop all services and cleanup
+        self.services.lock().unwrap().clear();
         trace!("... core is shut down");
     }
 }

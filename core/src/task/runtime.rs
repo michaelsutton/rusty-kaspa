@@ -106,6 +106,8 @@ impl AsyncRuntime {
             .collect::<Vec<TaskJoinHandle<AsyncServiceResult<()>>>>();
         try_join_all(futures).await.unwrap();
 
+        // Drop all services and cleanup
+        self.services.lock().unwrap().clear();
         trace!("async-runtime worker stopped");
     }
 
