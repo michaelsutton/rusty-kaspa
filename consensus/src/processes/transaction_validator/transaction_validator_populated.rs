@@ -19,6 +19,12 @@ impl TransactionValidator {
         Ok(total_in - total_out)
     }
 
+    pub fn calculate_populated_transaction_fee(&self, tx: &impl VerifiableTransaction) -> TxResult<u64> {
+        let total_in = self.check_transaction_input_amounts(tx)?;
+        let total_out = Self::check_transaction_output_values(tx, total_in)?;
+        Ok(total_in - total_out)
+    }
+
     fn check_transaction_coinbase_maturity(&self, tx: &impl VerifiableTransaction, pov_daa_score: u64) -> TxResult<()> {
         if let Some((index, (input, entry))) = tx
             .populated_inputs()

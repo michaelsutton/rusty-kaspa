@@ -93,7 +93,10 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 
-use super::errors::{PruningImportError, PruningImportResult};
+use super::{
+    errors::{PruningImportError, PruningImportResult},
+    utxo_validation::TxValidationFull,
+};
 
 pub struct VirtualStateProcessor {
     // Channels
@@ -810,7 +813,7 @@ impl VirtualStateProcessor {
         // which were previously validated through `validate_mempool_transaction_and_populate`, hence we only perform
         // in-context validations
         self.transaction_validator.utxo_free_tx_validation(tx, virtual_state.daa_score, virtual_state.past_median_time)?;
-        self.validate_transaction_in_utxo_context(tx, utxo_view, virtual_state.daa_score)?;
+        self.validate_transaction_in_utxo_context::<TxValidationFull>(tx, utxo_view, virtual_state.daa_score)?;
         Ok(())
     }
 
@@ -1029,7 +1032,7 @@ impl VirtualStateProcessor {
 
         // Validate transactions of the pruning point itself
         let new_pruning_point_transactions = self.block_transactions_store.get(new_pruning_point).unwrap();
-        let validated_transactions = self.validate_transactions_in_parallel(
+        let validated_transactions = self.validate_transactions_in_parallel::<TxValidationFull>(
             &new_pruning_point_transactions,
             &virtual_read.utxo_set,
             new_pruning_point_header.daa_score,
