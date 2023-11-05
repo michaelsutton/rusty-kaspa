@@ -357,7 +357,7 @@ impl RpcApi for RpcCoreService {
         Ok(GetInfoResponse {
             p2p_id: self.flow_context.node_id.to_string(),
             mempool_size: self.mining_manager.clone().transaction_count(true, false).await as u64,
-            server_version: version().to_string(),
+            server_version: "0.12.14".to_string(),
             is_utxo_indexed: self.config.utxoindex,
             is_synced: self.has_sufficient_peer_connectivity() && is_nearly_synced,
             has_notify_command: true,
@@ -717,7 +717,7 @@ impl RpcApi for RpcCoreService {
 
         Ok(GetServerInfoResponse {
             rpc_api_version: RPC_API_VERSION,
-            server_version: version().to_string(),
+            server_version: "0.12.14".to_string(),
             network_id: self.config.net,
             has_utxo_index: self.config.utxoindex,
             is_synced,
