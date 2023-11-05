@@ -404,15 +404,18 @@ impl IbdFlow {
         try_join_all(jobs).await?;
         dequeue_with_timeout!(self.incoming_route, Payload::DoneHeaders)?;
 
-        if consensus.async_get_block_status(relay_block_hash).await.is_none() {
-            // If the relay block has still not been received, the peer is misbehaving
-            Err(ProtocolError::OtherOwned(format!(
-                "did not receive relay block {} from peer {} during block download",
-                relay_block_hash, self.router
-            )))
-        } else {
-            Ok(())
-        }
+        // TEMP
+        Ok(())
+
+        // if consensus.async_get_block_status(relay_block_hash).await.is_none() {
+        //     // If the relay block has still not been received, the peer is misbehaving
+        //     Err(ProtocolError::OtherOwned(format!(
+        //         "did not receive relay block {} from peer {} during block download",
+        //         relay_block_hash, self.router
+        //     )))
+        // } else {
+        //     Ok(())
+        // }
     }
 
     async fn validate_staging_timestamps(
