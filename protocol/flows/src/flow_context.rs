@@ -203,7 +203,7 @@ impl FlowContext {
     ) -> Self {
         let hub = Hub::new();
 
-        let orphan_resolution_range = BASELINE_ORPHAN_RESOLUTION_RANGE + (config.bps() as f64).log2().min(3.0) as u32;
+        let orphan_resolution_range = BASELINE_ORPHAN_RESOLUTION_RANGE + (config.bps() as f64).log2().ceil() as u32;
 
         // The maximum amount of orphans allowed in the orphans pool. This number is an
         // approximation of how many orphans there can possibly be on average.
@@ -358,6 +358,10 @@ impl FlowContext {
             },
         }
         unorphaned_blocks
+    }
+
+    pub async fn revalidate_orphans(&self, consensus: &ConsensusProxy) {
+        self.orphans_pool.write().await.revalidate_orphans(consensus).await
     }
 
     /// Adds the rpc-submitted block to the DAG and propagates it to peers.
