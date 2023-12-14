@@ -101,8 +101,7 @@ impl HandleRelayInvsFlow {
                 }
             }
 
-            if self.ctx.is_known_orphan(inv.hash).await {
-                self.enqueue_orphan_roots(&session, inv.hash).await;
+            if self.ctx.is_known_orphan(inv.hash).await && self.enqueue_orphan_roots(&session, inv.hash).await {
                 continue;
             }
 
@@ -172,18 +171,21 @@ impl HandleRelayInvsFlow {
         }
     }
 
-    async fn enqueue_orphan_roots(&mut self, consensus: &ConsensusProxy, orphan: Hash) {
+    async fn enqueue_orphan_roots(&mut self, consensus: &ConsensusProxy, orphan: Hash) -> bool {
         if let Some(roots) = self.ctx.get_orphan_roots(consensus, orphan).await {
             if roots.is_empty() {
                 info!("Block {} is known orphan but has no missing roots", orphan);
-                return;
+                return false;
             }
             if self.ctx.is_log_throttled() {
                 info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
             } else {
                 info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
             }
-            self.invs_route.enqueue_indirect_invs(roots)
+            self.invs_route.enqueue_indirect_invs(roots);
+            true
+        } else {
+            false
         }
     }
 
