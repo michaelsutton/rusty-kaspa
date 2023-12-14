@@ -4,7 +4,7 @@ use kaspa_consensus_core::{
     block::Block,
 };
 use kaspa_consensusmanager::ConsensusProxy;
-use kaspa_core::debug;
+use kaspa_core::{debug, warn};
 use kaspa_hashes::Hash;
 use kaspa_utils::option::OptionExtensions;
 use rand::Rng;
@@ -52,7 +52,7 @@ impl OrphanBlocksPool {
             debug!("Orphan blocks pool size exceeded. Evicting a random orphan block.");
             // Evict a random orphan in order to keep pool size under the limit
             if let Some((evicted, _)) = self.orphans.swap_remove_index(rand::thread_rng().gen_range(0..self.max_orphans)) {
-                debug!("Evicted {} from the orphan blocks pool", evicted);
+                warn!("Evicted {} from the orphan blocks pool", evicted);
             }
         }
         for parent in orphan_block.header.direct_parents() {
