@@ -325,7 +325,7 @@ impl FlowContext {
 
     pub async fn add_orphan(&self, orphan_block: Block) {
         if self.is_log_throttled() {
-            debug!("Received a block with missing parents, adding to orphan pool: {}", orphan_block.hash());
+            info!("Received a block with missing parents, adding to orphan pool: {}", orphan_block.hash());
         } else {
             info!("Received a block with missing parents, adding to orphan pool: {}", orphan_block.hash());
         }

@@ -4,7 +4,7 @@ use crate::{
 };
 use kaspa_consensus_core::{api::BlockValidationFutures, block::Block, blockstatus::BlockStatus, errors::block::RuleError};
 use kaspa_consensusmanager::ConsensusProxy;
-use kaspa_core::{debug, info};
+use kaspa_core::{debug, info, time::Stopwatch, warn};
 use kaspa_hashes::Hash;
 use kaspa_p2p_lib::{
     common::ProtocolError,
@@ -12,7 +12,10 @@ use kaspa_p2p_lib::{
     pb::{kaspad_message::Payload, InvRelayBlockMessage, RequestBlockLocatorMessage, RequestRelayBlocksMessage},
     IncomingRoute, Router, SharedIncomingRoute,
 };
-use kaspa_utils::channel::{JobSender, JobTrySendError as TrySendError};
+use kaspa_utils::{
+    channel::{JobSender, JobTrySendError as TrySendError},
+    iter::IterExtensions,
+};
 use std::{collections::VecDeque, sync::Arc};
 
 pub struct RelayInvMessage {
@@ -142,7 +145,7 @@ impl HandleRelayInvsFlow {
             match block_task.await {
                 Ok(_) => {}
                 Err(RuleError::MissingParents(missing_parents)) => {
-                    debug!("Block {} is orphan and has missing parents: {:?}", block.hash(), missing_parents);
+                    info!("Block {} is orphan and has missing parents: {:?}", block.hash(), missing_parents);
                     self.process_orphan(&session, block, inv.is_indirect).await?;
                     continue;
                 }
@@ -172,10 +175,11 @@ impl HandleRelayInvsFlow {
     async fn enqueue_orphan_roots(&mut self, consensus: &ConsensusProxy, orphan: Hash) {
         if let Some(roots) = self.ctx.get_orphan_roots(consensus, orphan).await {
             if roots.is_empty() {
+                info!("Block {} is known orphan but has no missing roots", orphan);
                 return;
             }
             if self.ctx.is_log_throttled() {
-                debug!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
+                info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
             } else {
                 info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
             }
@@ -192,6 +196,7 @@ impl HandleRelayInvsFlow {
         let Some(request_scope) = self.ctx.try_adding_block_request(requested_hash) else {
             return Ok(None);
         };
+        let sw = Stopwatch::new("request relay");
         self.router
             .enqueue(make_request!(
                 Payload::RequestRelayBlocks,
@@ -201,6 +206,10 @@ impl HandleRelayInvsFlow {
             .await?;
         let msg = dequeue_with_timeout!(self.msg_route, Payload::Block)?;
         let block: Block = msg.try_into()?;
+        let elapsed = sw.elapsed();
+        if elapsed > std::time::Duration::from_millis(200) {
+            kaspa_core::warn!("[request relay] Abnormal time: {:#?} ({})", elapsed, requested_hash);
+        }
         if block.hash() != requested_hash {
             Err(ProtocolError::OtherOwned(format!("requested block hash {} but got block {}", requested_hash, block.hash())))
         } else {
@@ -256,11 +265,12 @@ impl HandleRelayInvsFlow {
         // but we prefer not relying on such details for correctness
         //
         // TODO: change syncer-side to only send the most early block since it's sufficient for our needs
-        for h in locator_hashes.into_iter().rev() {
+        for h in locator_hashes.iter().copied().rev() {
             if consensus.async_get_block_status(h).await.is_some_and(|s| s.has_block_body()) {
                 return Ok(true);
             }
         }
+        warn!("Got block locator with {} but none are known", locator_hashes.iter().reusable_format(", "));
         Ok(false)
     }
 }
