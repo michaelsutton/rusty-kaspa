@@ -218,6 +218,13 @@ impl Connection {
                             trace!("GRPC, request: {:?}, client: {}", request, connection.identity());
                             match router.route_to_handler(&connection, request).await {
                                 Ok(()) => {},
+                                Err(GrpcServerError::RouteIsFull(_)) => {
+                                    let response = Ok(kaspa_rpc_core::SubmitBlockResponse { report: kaspa_rpc_core::SubmitBlockReport::Reject(kaspa_rpc_core::SubmitBlockRejectReason::TOOManyBlocks) });
+                                    if connection.enqueue(response.into()).await.is_err() {
+                                        debug!("GRPC, Connection receive loop - route error for client: {}", connection);
+                                        break;
+                                    }
+                                }
                                 Err(e) => {
                                     debug!("GRPC, Connection receive loop - route error: {} for client: {}", e, connection);
                                     break;

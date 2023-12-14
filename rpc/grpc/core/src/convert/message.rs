@@ -109,6 +109,7 @@ from!(item: &kaspa_rpc_core::SubmitBlockReport, RejectReason, {
         kaspa_rpc_core::SubmitBlockReport::Success => RejectReason::None,
         kaspa_rpc_core::SubmitBlockReport::Reject(kaspa_rpc_core::SubmitBlockRejectReason::BlockInvalid) => RejectReason::BlockInvalid,
         kaspa_rpc_core::SubmitBlockReport::Reject(kaspa_rpc_core::SubmitBlockRejectReason::IsInIBD) => RejectReason::IsInIbd,
+        kaspa_rpc_core::SubmitBlockReport::Reject(kaspa_rpc_core::SubmitBlockRejectReason::TOOManyBlocks) => RejectReason::None,
     }
 });
 

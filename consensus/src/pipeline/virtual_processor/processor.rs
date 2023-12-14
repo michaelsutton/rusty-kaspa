@@ -176,8 +176,8 @@ impl VirtualStateProcessor {
             thread_pool,
 
             genesis: params.genesis.clone(),
-            max_block_parents: params.max_block_parents.min(16), // TODO: TEMP
-            mergeset_size_limit: params.mergeset_size_limit,
+            max_block_parents: params.max_block_parents.min(16),      // TODO: TEMP
+            mergeset_size_limit: params.mergeset_size_limit.min(248), // TODO: TEMP
             pruning_depth: params.pruning_depth,
 
             db,
