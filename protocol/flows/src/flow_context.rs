@@ -341,7 +341,7 @@ impl FlowContext {
         self.orphans_pool.read().await.is_known_orphan(hash)
     }
 
-    pub async fn get_orphan_roots(&self, consensus: &ConsensusProxy, orphan: Hash) -> Option<Vec<Hash>> {
+    pub async fn get_orphan_roots(&self, consensus: &ConsensusProxy, orphan: Hash) -> Result<Option<Vec<Hash>>, Block> {
         self.orphans_pool.read().await.get_orphan_roots(consensus, orphan).await
     }
 

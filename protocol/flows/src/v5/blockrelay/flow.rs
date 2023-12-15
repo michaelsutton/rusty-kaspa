@@ -101,9 +101,13 @@ impl HandleRelayInvsFlow {
                 }
             }
 
+            let mut orphan_block = None;
             if self.ctx.is_known_orphan(inv.hash).await {
-                self.enqueue_orphan_roots(&session, inv.hash).await;
-                continue;
+                if let Some(block) = self.enqueue_orphan_roots(&session, inv.hash).await {
+                    orphan_block = Some(block);
+                } else {
+                    continue;
+                }
             }
 
             if self.ctx.is_ibd_running() && !session.async_is_nearly_synced().await {
@@ -114,7 +118,7 @@ impl HandleRelayInvsFlow {
             }
 
             // We keep the request scope alive until consensus processes the block
-            let Some((block, request_scope)) = self.request_block(inv.hash, self.msg_route.id()).await? else {
+            let Some((block, request_scope)) = self.request_block(inv.hash, self.msg_route.id(), orphan_block).await? else {
                 debug!("Relay block {} was already requested from another peer, continuing...", inv.hash);
                 continue;
             };
@@ -172,30 +176,51 @@ impl HandleRelayInvsFlow {
         }
     }
 
-    async fn enqueue_orphan_roots(&mut self, consensus: &ConsensusProxy, orphan: Hash) {
-        if let Some(roots) = self.ctx.get_orphan_roots(consensus, orphan).await {
-            if roots.is_empty() {
-                // info!("Block {} is known orphan but has no missing roots", orphan);
-                return;
+    async fn enqueue_orphan_roots(&mut self, consensus: &ConsensusProxy, orphan: Hash) -> Option<Block> {
+        match self.ctx.get_orphan_roots(consensus, orphan).await {
+            Ok(Some(roots)) => {
+                if roots.is_empty() {
+                    // info!("Block {} is known orphan but has no missing roots", orphan);
+                    return None;
+                }
+                if self.ctx.is_log_throttled() {
+                    info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
+                } else {
+                    info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
+                }
+                self.invs_route.enqueue_indirect_invs(roots);
+                None
             }
-            if self.ctx.is_log_throttled() {
-                info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
-            } else {
-                info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
-            }
-            self.invs_route.enqueue_indirect_invs(roots);
+            Ok(None) => None,
+            Err(block) => Some(block),
         }
+        // if let Some(roots) = self.ctx.get_orphan_roots(consensus, orphan).await {
+        //     if roots.is_empty() {
+        //         // info!("Block {} is known orphan but has no missing roots", orphan);
+        //         return;
+        //     }
+        //     if self.ctx.is_log_throttled() {
+        //         info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
+        //     } else {
+        //         info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
+        //     }
+        //     self.invs_route.enqueue_indirect_invs(roots);
+        // }
     }
 
     async fn request_block(
         &mut self,
         requested_hash: Hash,
         request_id: u32,
+        orphan_block: Option<Block>,
     ) -> Result<Option<(Block, RequestScope<Hash>)>, ProtocolError> {
         // Note: the request scope is returned and should be captured until block processing is completed
         let Some(request_scope) = self.ctx.try_adding_block_request(requested_hash) else {
             return Ok(None);
         };
+        if let Some(block) = orphan_block {
+            return Ok(Some((block, request_scope)));
+        }
         let sw = Stopwatch::new("request relay");
         self.router
             .enqueue(make_request!(
