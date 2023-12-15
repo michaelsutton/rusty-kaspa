@@ -4,7 +4,7 @@ use crate::{
 };
 use kaspa_consensus_core::{api::BlockValidationFutures, block::Block, blockstatus::BlockStatus, errors::block::RuleError};
 use kaspa_consensusmanager::ConsensusProxy;
-use kaspa_core::{debug, info};
+use kaspa_core::{debug, info, warn};
 use kaspa_hashes::Hash;
 use kaspa_p2p_lib::{
     common::ProtocolError,
@@ -151,7 +151,7 @@ impl HandleRelayInvsFlow {
                             session.validate_and_insert_block(block.clone());
                         virtual_state_task = virtual_state_task_inner;
                         match block_task_inner.await {
-                            Ok(_) => {}
+                            Ok(_) => warn!("Retried orphan block {} successfully", block.hash()), // TODO
                             Err(RuleError::MissingParents(_)) => continue,
                             Err(rule_error) => return Err(rule_error.into()),
                         }
