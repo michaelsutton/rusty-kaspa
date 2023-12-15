@@ -5,7 +5,7 @@ use crate::{
         Flow,
     },
 };
-use futures::future::try_join_all;
+use futures::future::{join_all, try_join_all};
 use kaspa_consensus_core::{
     api::BlockValidationFuture,
     block::Block,
@@ -132,7 +132,22 @@ impl IbdFlow {
         self.sync_missing_block_bodies(&session, relay_block.hash()).await?;
 
         // Following IBD we revalidate orphans since many of them might have been processed during the IBD
-        self.ctx.revalidate_orphans(&session).await;
+        // or are now processable
+        let (queued_hashes, virtual_processing_tasks) = self.ctx.revalidate_orphans(&session).await;
+        let mut unorphaned_hashes = Vec::with_capacity(queued_hashes.len());
+        let results = join_all(virtual_processing_tasks).await;
+        for (hash, result) in queued_hashes.into_iter().zip(results) {
+            match result {
+                Ok(_) => unorphaned_hashes.push(hash),
+                // We do not return the error and disconnect here since we don't know
+                // that this peer was the origin of the orphan block
+                Err(e) => warn!("Validation failed for orphan block {}: {}", hash, e),
+            }
+        }
+        match unorphaned_hashes.len() {
+            0 => {}
+            n => info!("IBD post processing: unorphaned {} blocks ...{}", n, unorphaned_hashes.last().unwrap()),
+        }
 
         Ok(())
     }

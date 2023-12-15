@@ -141,7 +141,8 @@ impl OrphanBlocksPool {
     /// This is important for the overall health of the pool and for ensuring that
     /// orphan blocks don't evict due to pool size limit while already processed
     /// blocks remain in it. Should be called following IBD.  
-    pub async fn revalidate_orphans(&mut self, consensus: &ConsensusProxy) {
+    pub async fn revalidate_orphans(&mut self, consensus: &ConsensusProxy) -> (Vec<Hash>, Vec<BlockValidationFuture>) {
+        // First, cleanup blocks already processed by consensus
         let mut i = 0;
         while i < self.orphans.len() {
             if let Some((&h, _)) = self.orphans.get_index(i) {
@@ -156,6 +157,36 @@ impl OrphanBlocksPool {
                 i += 1;
             }
         }
+
+        // Next, search for root blocks which are processable
+        let mut roots = Vec::new();
+        for block in self.orphans.values() {
+            let mut processable = true;
+            for p in block.block.header.direct_parents().iter().copied() {
+                if self.orphans.contains_key(&p) || consensus.async_get_block_status(p).await.is_none_or(|s| s.is_header_only()) {
+                    processable = false;
+                    break;
+                }
+            }
+            if processable {
+                roots.push(block.block.clone());
+            }
+        }
+
+        // Now process the roots and unorphan their descendents
+        let mut virtual_processing_tasks = Vec::with_capacity(roots.len());
+        let mut queued_hashes = Vec::with_capacity(roots.len());
+        for root in roots {
+            let root_hash = root.hash();
+            let BlockValidationFutures { block_task: _, virtual_state_task: root_task } = consensus.validate_and_insert_block(root);
+            virtual_processing_tasks.push(root_task);
+            queued_hashes.push(root_hash);
+            let (unorphan_blocks, _, unorphan_tasks) = self.unorphan_blocks(consensus, root_hash).await;
+            virtual_processing_tasks.extend(unorphan_tasks);
+            queued_hashes.extend(unorphan_blocks.into_iter().map(|b| b.hash()));
+        }
+
+        (queued_hashes, virtual_processing_tasks)
     }
 }
 
@@ -206,6 +237,8 @@ mod tests {
         let d = Block::from_precomputed_hash(11.into(), vec![10.into()]);
         let e = Block::from_precomputed_hash(12.into(), vec![10.into()]);
         let f = Block::from_precomputed_hash(13.into(), vec![12.into()]);
+        let g = Block::from_precomputed_hash(14.into(), vec![13.into()]);
+        let h = Block::from_precomputed_hash(15.into(), vec![14.into()]);
 
         pool.add_orphan(c.clone());
         pool.add_orphan(d.clone());
@@ -225,14 +258,15 @@ mod tests {
         pool.add_orphan(d.clone());
         pool.add_orphan(e.clone());
         pool.add_orphan(f.clone());
-        assert_eq!(pool.orphans.len(), 3);
+        pool.add_orphan(h.clone());
+        assert_eq!(pool.orphans.len(), 4);
         pool.revalidate_orphans(&consensus).await;
-        assert_eq!(pool.orphans.len(), 2);
-        consensus.validate_and_insert_block(e.clone()).virtual_state_task.await.unwrap();
-        consensus.validate_and_insert_block(f.clone()).virtual_state_task.await.unwrap();
+        assert_eq!(pool.orphans.len(), 1);
+        assert!(pool.orphans.contains_key(&h.hash())); // h's parent, g, was never inserted to the pool
+        pool.add_orphan(g.clone());
         pool.revalidate_orphans(&consensus).await;
         assert!(pool.orphans.is_empty());
 
-        drop((a, b, c, d, e, f));
+        drop((a, b, c, d, e, f, g, h));
     }
 }
