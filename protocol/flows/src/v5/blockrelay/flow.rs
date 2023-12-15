@@ -97,6 +97,7 @@ impl HandleRelayInvsFlow {
                 _ => {
                     // Block is already known, skip to next inv
                     debug!("Relay block {} already exists, continuing...", inv.hash);
+                    self.ctx.on_new_block2(&session, inv.hash).await;
                     continue;
                 }
             }

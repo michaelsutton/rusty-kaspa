@@ -411,6 +411,47 @@ impl FlowContext {
         self.accepted_block_logger.is_some()
     }
 
+    pub async fn on_new_block2(&self, consensus: &ConsensusProxy, hash: Hash) {
+        let mut blocks = self.unorphan_blocks(consensus, hash).await;
+        if blocks.is_empty() {
+            return;
+        }
+        warn!("KNOWN RELAY BLOCK {} UNORPHANED {} BLOCKS", hash, blocks.len());
+
+        // Broadcast unorphaned blocks
+        let msgs = blocks
+            .iter()
+            .map(|(b, _)| make_message!(Payload::InvRelayBlock, InvRelayBlockMessage { hash: Some(b.hash().into()) }))
+            .collect();
+        self.hub.broadcast_many(msgs).await;
+
+        // Process blocks in topological order
+        blocks.sort_by(|a, b| a.0.header.blue_work.partial_cmp(&b.0.header.blue_work).unwrap());
+        // Use a ProcessQueue so we get rid of duplicates
+        let mut transactions_to_broadcast = ProcessQueue::new();
+        for (block, virtual_state_task) in blocks {
+            // We only care about waiting for virtual to process the block at this point, before proceeding with post-processing
+            // actions such as updating the mempool. We know this will not err since `block_task` already completed w/o error
+            let _ = virtual_state_task.await;
+            if let Ok(txs) = self
+                .mining_manager()
+                .clone()
+                .handle_new_block_transactions(consensus, block.header.daa_score, block.transactions.clone())
+                .await
+            {
+                transactions_to_broadcast.enqueue_chunk(txs.into_iter().map(|x| x.id()));
+            }
+        }
+
+        // Don't relay transactions when in IBD
+        if self.is_ibd_running() {
+            return;
+        }
+
+        self.broadcast_transactions(transactions_to_broadcast).await;
+        self.mempool_scan(consensus).await;
+    }
+
     /// Updates the mempool after a new block arrival, relays newly unorphaned transactions
     /// and possibly rebroadcast manually added transactions when not in IBD.
     ///
@@ -450,7 +491,10 @@ impl FlowContext {
         }
 
         self.broadcast_transactions(transactions_to_broadcast).await;
+        self.mempool_scan(consensus).await;
+    }
 
+    async fn mempool_scan(&self, consensus: &ConsensusProxy) {
         if self.should_run_mempool_scanning_task().await {
             // Spawn a task executing the removal of expired low priority transactions and, if time has come too,
             // the revalidation of high priority transactions.
