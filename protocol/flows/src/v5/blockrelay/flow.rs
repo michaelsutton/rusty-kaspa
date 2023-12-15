@@ -101,7 +101,8 @@ impl HandleRelayInvsFlow {
                 }
             }
 
-            if self.ctx.is_known_orphan(inv.hash).await && self.enqueue_orphan_roots(&session, inv.hash).await {
+            if self.ctx.is_known_orphan(inv.hash).await {
+                self.enqueue_orphan_roots(&session, inv.hash).await;
                 continue;
             }
 
@@ -171,11 +172,11 @@ impl HandleRelayInvsFlow {
         }
     }
 
-    async fn enqueue_orphan_roots(&mut self, consensus: &ConsensusProxy, orphan: Hash) -> bool {
+    async fn enqueue_orphan_roots(&mut self, consensus: &ConsensusProxy, orphan: Hash) {
         if let Some(roots) = self.ctx.get_orphan_roots(consensus, orphan).await {
             if roots.is_empty() {
-                info!("Block {} is known orphan but has no missing roots", orphan);
-                return false;
+                // info!("Block {} is known orphan but has no missing roots", orphan);
+                return;
             }
             if self.ctx.is_log_throttled() {
                 info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
@@ -183,9 +184,6 @@ impl HandleRelayInvsFlow {
                 info!("Block {} has {} missing ancestors. Adding them to the invs queue...", orphan, roots.len());
             }
             self.invs_route.enqueue_indirect_invs(roots);
-            true
-        } else {
-            false
         }
     }
 
@@ -223,6 +221,20 @@ impl HandleRelayInvsFlow {
         // Return if the block has been orphaned from elsewhere already
         if self.ctx.is_known_orphan(block.hash()).await {
             return Ok(());
+        }
+
+        if !is_indirect_inv {
+            if let Some(roots) = self.ctx.add_orphan_if_parents_orphan(consensus, block.clone()).await {
+                if !roots.is_empty() {
+                    if self.ctx.is_log_throttled() {
+                        info!("Block {} has {} missing ancestors. Adding them to the invs queue...", block.hash(), roots.len());
+                    } else {
+                        info!("Block {} has {} missing ancestors. Adding them to the invs queue...", block.hash(), roots.len());
+                    }
+                    self.invs_route.enqueue_indirect_invs(roots);
+                }
+                return Ok(());
+            }
         }
 
         // Add the block to the orphan pool if it's within orphan resolution range.

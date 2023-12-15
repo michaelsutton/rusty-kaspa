@@ -42,6 +42,37 @@ impl OrphanBlocksPool {
         Self { orphans: IndexMap::with_capacity(max_orphans), max_orphans }
     }
 
+    // TODO: unify logic with add_orphan
+    pub async fn add_orphan_if_parents_orphan(&mut self, consensus: &ConsensusProxy, orphan_block: Block) -> Option<Vec<Hash>> {
+        let orphan_hash = orphan_block.hash();
+        if self.orphans.contains_key(&orphan_hash) {
+            return None;
+        }
+
+        let mut has_parents = false;
+        for parent in orphan_block.header.direct_parents() {
+            if let Some(entry) = self.orphans.get_mut(parent) {
+                has_parents = true;
+                entry.children.insert(orphan_hash);
+            }
+        }
+
+        if has_parents {
+            if self.orphans.len() == self.max_orphans {
+                debug!("Orphan blocks pool size exceeded. Evicting a random orphan block.");
+                // Evict a random orphan in order to keep pool size under the limit
+                if let Some((evicted, _)) = self.orphans.swap_remove_index(rand::thread_rng().gen_range(0..self.max_orphans)) {
+                    warn!("Evicted {} from the orphan blocks pool", evicted);
+                }
+            }
+            self.orphans
+                .insert(orphan_block.hash(), OrphanBlock::new(orphan_block, self.iterate_child_orphans(orphan_hash).collect()));
+            self.get_orphan_roots(consensus, orphan_hash).await
+        } else {
+            None
+        }
+    }
+
     /// Adds the provided block to the orphan pool
     pub fn add_orphan(&mut self, orphan_block: Block) {
         let orphan_hash = orphan_block.hash();

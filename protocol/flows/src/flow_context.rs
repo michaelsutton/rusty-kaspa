@@ -206,7 +206,7 @@ impl FlowContext {
     ) -> Self {
         let hub = Hub::new();
 
-        let orphan_resolution_range = BASELINE_ORPHAN_RESOLUTION_RANGE + (config.bps() as f64).log2().ceil() as u32;
+        let orphan_resolution_range = BASELINE_ORPHAN_RESOLUTION_RANGE + 1; // + (config.bps() as f64).log2().ceil() as u32;
 
         // The maximum amount of orphans allowed in the orphans pool. This number is an approximation
         // of how many orphans there can possibly be on average bounded by an upper bound.
@@ -301,6 +301,7 @@ impl FlowContext {
                 } else {
                     let now = Instant::now();
                     if now > e.get().timestamp + REQUEST_SCOPE_WAIT_TIME {
+                        warn!("Adding a parallel request for {}, gap: {:#?}", req, now - e.get().timestamp);
                         e.get_mut().timestamp = now;
                         Some(RequestScope::new(map.clone(), req))
                     } else {
@@ -330,6 +331,10 @@ impl FlowContext {
             info!("Received a block with missing parents, adding to orphan pool: {}", orphan_block.hash());
         }
         self.orphans_pool.write().await.add_orphan(orphan_block)
+    }
+
+    pub async fn add_orphan_if_parents_orphan(&self, consensus: &ConsensusProxy, orphan_block: Block) -> Option<Vec<Hash>> {
+        self.orphans_pool.write().await.add_orphan_if_parents_orphan(consensus, orphan_block).await
     }
 
     pub async fn is_known_orphan(&self, hash: Hash) -> bool {
