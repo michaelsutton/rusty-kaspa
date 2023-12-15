@@ -223,19 +223,19 @@ impl HandleRelayInvsFlow {
             return Ok(());
         }
 
-        if !is_indirect_inv {
-            if let Some(roots) = self.ctx.add_orphan_if_parents_orphan(consensus, block.clone()).await {
-                if !roots.is_empty() {
-                    if self.ctx.is_log_throttled() {
-                        info!("Block {} has {} missing ancestors. Adding them to the invs queue...", block.hash(), roots.len());
-                    } else {
-                        info!("Block {} has {} missing ancestors. Adding them to the invs queue...", block.hash(), roots.len());
-                    }
-                    self.invs_route.enqueue_indirect_invs(roots);
-                }
-                return Ok(());
-            }
-        }
+        // if !is_indirect_inv {
+        //     if let Some(roots) = self.ctx.add_orphan_if_parents_orphan(consensus, block.clone()).await {
+        //         if !roots.is_empty() {
+        //             if self.ctx.is_log_throttled() {
+        //                 info!("Block {} has {} missing ancestors. Adding them to the invs queue...", block.hash(), roots.len());
+        //             } else {
+        //                 info!("Block {} has {} missing ancestors. Adding them to the invs queue...", block.hash(), roots.len());
+        //             }
+        //             self.invs_route.enqueue_indirect_invs(roots);
+        //         }
+        //         return Ok(());
+        //     }
+        // }
 
         // Add the block to the orphan pool if it's within orphan resolution range.
         // If the block is indirect it means one of its descendants was already is resolution range, so
