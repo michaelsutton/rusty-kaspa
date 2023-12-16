@@ -17,13 +17,13 @@ use std::{collections::VecDeque, sync::Arc};
 
 pub struct RelayInvMessage {
     hash: Hash,
-    is_indirect: bool,
+    known_within_range: bool,
 }
 
 /// Encapsulates an incoming invs route which also receives data locally
 pub struct TwoWayIncomingRoute {
     incoming_route: SharedIncomingRoute,
-    indirect_invs: VecDeque<Hash>,
+    indirect_invs: VecDeque<RelayInvMessage>,
 }
 
 impl TwoWayIncomingRoute {
@@ -31,17 +31,21 @@ impl TwoWayIncomingRoute {
         Self { incoming_route, indirect_invs: VecDeque::new() }
     }
 
+    pub fn enqueue_unknown_indirect_invs<I: IntoIterator<Item = Hash>>(&mut self, iter: I) {
+        self.indirect_invs.extend(iter.into_iter().map(|h| RelayInvMessage { hash: h, known_within_range: false }))
+    }
+
     pub fn enqueue_indirect_invs<I: IntoIterator<Item = Hash>>(&mut self, iter: I) {
-        self.indirect_invs.extend(iter)
+        self.indirect_invs.extend(iter.into_iter().map(|h| RelayInvMessage { hash: h, known_within_range: true }))
     }
 
     pub async fn dequeue(&mut self) -> Result<RelayInvMessage, ProtocolError> {
         if let Some(inv) = self.indirect_invs.pop_front() {
-            Ok(RelayInvMessage { hash: inv, is_indirect: true })
+            Ok(inv)
         } else {
             let msg = dequeue!(self.incoming_route, Payload::InvRelayBlock)?;
             let inv = msg.try_into()?;
-            Ok(RelayInvMessage { hash: inv, is_indirect: false })
+            Ok(RelayInvMessage { hash: inv, known_within_range: false })
         }
     }
 }
@@ -129,7 +133,7 @@ impl HandleRelayInvsFlow {
 
             // We do not apply the skip heuristic below if inv was queued indirectly (as an orphan root), since
             // that means the process started by a proper and relevant relay block
-            if !inv.is_indirect && !broadcast {
+            if !inv.known_within_range && !broadcast {
                 debug!(
                     "Relay block {} has lower blue work than virtual's merge depth root ({} <= {}), hence we are skipping it",
                     inv.hash, block.header.blue_work, blue_work_threshold
@@ -143,7 +147,7 @@ impl HandleRelayInvsFlow {
                 Ok(_) => {}
                 Err(RuleError::MissingParents(missing_parents)) => {
                     debug!("Block {} is orphan and has missing parents: {:?}", block.hash(), missing_parents);
-                    if self.process_orphan(&session, block.clone(), inv.is_indirect).await? {
+                    if self.process_orphan(&session, block.clone(), inv.known_within_range).await? {
                         continue;
                     } else {
                         // Retry
@@ -226,17 +230,31 @@ impl HandleRelayInvsFlow {
         &mut self,
         consensus: &ConsensusProxy,
         block: Block,
-        is_indirect_inv: bool,
+        known_within_range: bool,
     ) -> Result<bool, ProtocolError> {
         // Return if the block has been orphaned from elsewhere already
         if self.ctx.is_known_orphan(block.hash()).await {
             return Ok(false);
         }
 
+        if let Some(ibd_daa_score) = self.ctx.ibd_daa_score() {
+            if block.header.daa_score + 100 > ibd_daa_score && block.header.daa_score < ibd_daa_score + 500 {
+                let hash = block.hash();
+                self.ctx.add_orphan(block).await;
+                if let Some(roots) = self.ctx.get_orphan_roots(consensus, hash).await {
+                    if !roots.is_empty() {
+                        self.invs_route.enqueue_unknown_indirect_invs(roots);
+                        return Ok(true);
+                    }
+                }
+                return Ok(false);
+            }
+        }
+
         // Add the block to the orphan pool if it's within orphan resolution range.
         // If the block is indirect it means one of its descendants was already is resolution range, so
         // we can avoid the query.
-        if is_indirect_inv || self.check_orphan_resolution_range(consensus, block.hash(), self.msg_route.id()).await? {
+        if known_within_range || self.check_orphan_resolution_range(consensus, block.hash(), self.msg_route.id()).await? {
             let hash = block.hash();
             self.ctx.add_orphan(block).await;
             return Ok(self.enqueue_orphan_roots(consensus, hash).await);

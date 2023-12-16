@@ -127,7 +127,7 @@ pub struct FlowContextInner {
     transactions_spread: AsyncRwLock<TransactionsSpread>,
     shared_transaction_requests: Arc<Mutex<HashMap<TransactionId, RequestScopeMetadata>>>,
     is_ibd_running: Arc<AtomicBool>,
-    ibd_peer_key: Arc<RwLock<Option<PeerKey>>>,
+    ibd_peer_key: Arc<RwLock<Option<(PeerKey, u64)>>>,
     pub address_manager: Arc<Mutex<AddressManager>>,
     connection_manager: RwLock<Option<Arc<ConnectionManager>>>,
     mining_manager: MiningManagerProxy,
@@ -272,9 +272,9 @@ impl FlowContext {
         &self.mining_manager
     }
 
-    pub fn try_set_ibd_running(&self, peer_key: PeerKey) -> Option<IbdRunningGuard> {
+    pub fn try_set_ibd_running(&self, peer_key: PeerKey, daa_score: u64) -> Option<IbdRunningGuard> {
         if self.is_ibd_running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-            self.ibd_peer_key.write().replace(peer_key);
+            self.ibd_peer_key.write().replace((peer_key, daa_score));
             Some(IbdRunningGuard { indicator: self.is_ibd_running.clone() })
         } else {
             None
@@ -285,9 +285,17 @@ impl FlowContext {
         self.is_ibd_running.load(Ordering::SeqCst)
     }
 
+    pub fn ibd_daa_score(&self) -> Option<u64> {
+        if self.is_ibd_running() {
+            self.ibd_peer_key.read().map(|x| x.1)
+        } else {
+            None
+        }
+    }
+
     pub fn ibd_peer_key(&self) -> Option<PeerKey> {
         if self.is_ibd_running() {
-            *self.ibd_peer_key.read()
+            self.ibd_peer_key.read().map(|x| x.0)
         } else {
             None
         }
