@@ -74,12 +74,15 @@ use kaspa_hashes::Hash;
 use kaspa_muhash::MuHash;
 use kaspa_txscript::caches::TxScriptCacheCounters;
 
-use std::thread::{self, JoinHandle};
 use std::{
     future::Future,
     iter::once,
     ops::Deref,
     sync::{atomic::Ordering, Arc},
+};
+use std::{
+    sync::atomic::AtomicBool,
+    thread::{self, JoinHandle},
 };
 use tokio::sync::oneshot;
 
@@ -122,6 +125,9 @@ pub struct Consensus {
 
     // Other
     creation_timestamp: u64,
+
+    // Signals
+    is_process_exiting: Arc<AtomicBool>,
 }
 
 impl Deref for Consensus {
@@ -144,6 +150,7 @@ impl Consensus {
     ) -> Self {
         let params = &config.params;
         let perf_params = &config.perf;
+        let is_process_exiting: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 
         //
         // Storage layer
@@ -249,8 +256,15 @@ impl Consensus {
             counters.clone(),
         ));
 
-        let pruning_processor =
-            Arc::new(PruningProcessor::new(pruning_receiver, db.clone(), &storage, &services, pruning_lock.clone(), config.clone()));
+        let pruning_processor = Arc::new(PruningProcessor::new(
+            pruning_receiver,
+            db.clone(),
+            &storage,
+            &services,
+            pruning_lock.clone(),
+            config.clone(),
+            is_process_exiting.clone(),
+        ));
 
         // Ensure the relations stores are initialized
         header_processor.init();
@@ -278,6 +292,7 @@ impl Consensus {
             counters,
             config,
             creation_timestamp,
+            is_process_exiting,
         }
     }
 
@@ -333,6 +348,7 @@ impl Consensus {
     }
 
     pub fn signal_exit(&self) {
+        self.is_process_exiting.store(true, Ordering::SeqCst);
         self.block_sender.send(BlockProcessingMessage::Exit).unwrap();
     }
 
