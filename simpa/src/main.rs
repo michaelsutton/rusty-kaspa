@@ -23,7 +23,7 @@ use kaspa_core::{info, task::service::AsyncService, task::tick::TickService, tim
 use kaspa_database::prelude::ConnBuilder;
 use kaspa_database::{create_temp_db, load_existing_db};
 use kaspa_hashes::Hash;
-use kaspa_perf_monitor::builder::Builder;
+use kaspa_perf_monitor::{builder::Builder, counters::CountersSnapshot};
 use kaspa_utils::fd_budget;
 use simulator::network::KaspaNetworkSimulator;
 use std::{collections::VecDeque, sync::Arc, time::Duration};
@@ -70,7 +70,7 @@ struct Args {
 
     /// Logging level for all subsystems {off, error, warn, info, debug, trace}
     ///  -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems
-    #[arg(long = "loglevel", default_value = format!("info,{}=trace", env!("CARGO_PKG_NAME")))]
+    #[arg(long = "loglevel", default_value = format!("info,{}=trace,kaspa_perf_monitor::counters=trace", env!("CARGO_PKG_NAME")))]
     log_level: String,
 
     /// Output directory to save the simulation DB
@@ -138,8 +138,9 @@ fn main_impl(mut args: Args) {
 
     let stop_perf_monitor = args.perf_metrics.then(|| {
         let ts = Arc::new(TickService::new());
-        let cb = move |counters| {
-            trace!("metrics: {:?}", counters);
+
+        let cb = move |counters: CountersSnapshot| {
+            counters.log_metrics(kaspa_perf_monitor::SERVICE_NAME);
             #[cfg(feature = "heap")]
             trace!("heap stats: {:?}", dhat::HeapStats::get());
         };

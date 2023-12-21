@@ -1,3 +1,4 @@
+use kaspa_core::trace;
 use portable_atomic::{AtomicF64, AtomicUsize};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -78,4 +79,48 @@ pub struct CountersSnapshot {
     pub disk_io_write_bytes: u64,
     pub disk_io_read_per_sec: f64,
     pub disk_io_write_per_sec: f64,
+}
+
+fn to_human_readable(mut number_to_format: f64, precision: usize, suffix: &str) -> String {
+    let units = ["", "K", "M", "G", "T", "P", "E"];
+    let mut found_unit = "";
+
+    for unit in units {
+        if number_to_format < 1000.0 {
+            found_unit = unit;
+            break;
+        } else {
+            number_to_format /= 1000.0
+        }
+    }
+
+    format!("{number_to_format:.precision$}{}{}", found_unit, suffix)
+}
+
+impl CountersSnapshot {
+    pub fn log_metrics(&self, service_name: &str) {
+        trace!(
+            "[{}] process metrics: RSS: {} ({}), VIRT: {} ({}), cores: {}, cpu usage (per core): {}",
+            service_name,
+            self.resident_set_size,
+            to_human_readable(self.resident_set_size as f64, 2, "B"),
+            self.virtual_memory_size,
+            to_human_readable(self.virtual_memory_size as f64, 2, "B"),
+            self.core_num,
+            self.cpu_usage
+        );
+        trace!(
+            "[{}] disk io metrics: FD: {}, read: {} ({}), write: {} ({}), read rate: {} ({}), write rate: {} ({})",
+            service_name,
+            self.fd_num,
+            self.disk_io_read_bytes,
+            to_human_readable(self.disk_io_read_bytes as f64, 0, "B"),
+            self.disk_io_write_bytes,
+            to_human_readable(self.disk_io_write_bytes as f64, 0, "B"),
+            self.disk_io_read_per_sec,
+            to_human_readable(self.disk_io_read_per_sec, 0, "B/s"),
+            self.disk_io_write_per_sec,
+            to_human_readable(self.disk_io_write_per_sec, 0, "B/s")
+        );
+    }
 }
