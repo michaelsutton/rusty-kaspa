@@ -154,8 +154,18 @@ impl Runtime {
 
         let log_dir = get_log_dir(args);
 
+        let log_level = if args.perf_metrics {
+            if args.log_level.is_empty() {
+                "kaspa_perf_monitor::counters=trace".to_string()
+            } else {
+                format!("{},kaspa_perf_monitor::counters=trace", args.log_level)
+            }
+        } else {
+            args.log_level.clone()
+        };
+
         // Initialize the logger
-        kaspa_core::log::init_logger(log_dir.as_deref(), &args.log_level);
+        kaspa_core::log::init_logger(log_dir.as_deref(), &log_level);
 
         Self { log_dir: log_dir.map(|log_dir| log_dir.to_owned()) }
     }
