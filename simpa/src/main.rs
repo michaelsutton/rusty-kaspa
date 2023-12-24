@@ -70,7 +70,7 @@ struct Args {
 
     /// Logging level for all subsystems {off, error, warn, info, debug, trace}
     ///  -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems
-    #[arg(long = "loglevel", default_value = format!("info,{}=trace,kaspa_perf_monitor::counters=trace", env!("CARGO_PKG_NAME")))]
+    #[arg(long = "loglevel", default_value = format!("info,{}=trace", env!("CARGO_PKG_NAME")))]
     log_level: String,
 
     /// Output directory to save the simulation DB
