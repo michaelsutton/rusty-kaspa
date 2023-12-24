@@ -140,7 +140,7 @@ fn main_impl(mut args: Args) {
         let ts = Arc::new(TickService::new());
 
         let cb = move |counters: CountersSnapshot| {
-            counters.log_metrics(kaspa_perf_monitor::SERVICE_NAME);
+            trace!("{}", counters);
             #[cfg(feature = "heap")]
             trace!("heap stats: {:?}", dhat::HeapStats::get());
         };

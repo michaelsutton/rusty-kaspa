@@ -390,7 +390,7 @@ do you confirm? (answer y/n or pass --yes to the Kaspad command line to confirm 
         .with_tick_service(tick_service.clone());
     let perf_monitor = if args.perf_metrics {
         let cb = move |counters: CountersSnapshot| {
-            counters.log_metrics(kaspa_perf_monitor::SERVICE_NAME);
+            info!("{}", counters);
             #[cfg(feature = "heap")]
             trace!("[{}] heap stats: {:?}", kaspa_perf_monitor::SERVICE_NAME, dhat::HeapStats::get());
         };
