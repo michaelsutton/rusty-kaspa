@@ -62,8 +62,8 @@ where
     TData: Clone + Send + Sync + MemSizeEstimator,
     S: BuildHasher + Default,
 {
-    /// Evicts items until meeting cache policy requirements
-    fn evict(&mut self, policy: &CachePolicyInner) {
+    /// Evicts items until meeting cache policy requirements (in tracked mode)
+    fn tracked_evict(&mut self, policy: &CachePolicyInner) {
         // We allow passing tracked size limit as long as there are no more than min_items items
         while self.tracked_size > policy.max_size && self.map.len() > policy.min_items {
             if let Some((_, v)) = self.map.swap_remove_index(rand::thread_rng().gen_range(0..self.map.len())) {
@@ -79,7 +79,7 @@ where
             if let Some(removed) = self.map.insert(key, data) {
                 self.tracked_size -= removed.estimate_size(policy.mem_mode);
             }
-            self.evict(policy);
+            self.tracked_evict(policy);
         } else {
             if self.map.len() == policy.max_size {
                 self.map.swap_remove_index(rand::thread_rng().gen_range(0..policy.max_size));
@@ -97,7 +97,7 @@ where
                 self.tracked_size -= data.estimate_size(policy.mem_mode);
                 op(data);
                 self.tracked_size += data.estimate_size(policy.mem_mode);
-                self.evict(policy);
+                self.tracked_evict(policy);
             } else {
                 op(data);
             }
