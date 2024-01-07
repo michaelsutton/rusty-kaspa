@@ -159,7 +159,7 @@ pub const TESTNET11_GENESIS: GenesisBlock = GenesisBlock {
         0x01,                                                                         // Varint
         0x00,                                                                         // OP-FALSE
         0x6b, 0x61, 0x73, 0x70, 0x61, 0x2d, 0x74, 0x65, 0x73, 0x74, 0x6e, 0x65, 0x74, // kaspa-testnet
-        11, 3                                                                         // TN11, Relaunch 3
+        11, 4                                                                         // TN11, Relaunch 4
     ],
     ..TESTNET_GENESIS
 };
