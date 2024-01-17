@@ -87,10 +87,29 @@ impl Hub {
 
     /// Selects a random subset of peers, trying to select at least half for outbound when possible
     fn select_some_peers(&self, num_peers: usize) -> impl Iterator<Item = Arc<Router>> {
+        let thread_rng = &mut rand::thread_rng();
         let peers = self.peers.read();
-        let total_outbound = peers.values().filter(|peer| peer.is_outbound()).count();
-        let total_inbound = peers.len() - total_outbound;
 
+        // We expect num_peers ~= num of outbound << num of inbound, so we collect the outbound while
+        // we iterate the full list of peers choosing num_peers random peers from inbound. This way we
+        // iterate the full map only once and all our following operations are O(num_peers)
+        let mut outbound_peers = Vec::with_capacity(num_peers);
+        let selected_inbound = peers
+            .values()
+            .filter(|&peer| {
+                if peer.is_outbound() {
+                    outbound_peers.push(peer.clone());
+                    false
+                } else {
+                    true
+                }
+            })
+            .cloned()
+            .choose_multiple(thread_rng, num_peers);
+
+        // Now we calculate the exact number of peers to select from inbound/outbound
+        let total_outbound = outbound_peers.len();
+        let total_inbound = peers.len() - total_outbound;
         let mut outbound_count = ((num_peers + 1) / 2).min(total_outbound);
 
         // If there won't be enough inbound peers to meet the num_peers after we've selected only half for outbound,
@@ -101,15 +120,11 @@ impl Hub {
 
         let inbound_count = (num_peers - outbound_count).min(total_inbound);
 
-        let thread_rng = &mut rand::thread_rng();
-
-        peers
-            .values()
-            .filter(|peer| peer.is_outbound())
-            .cloned()
-            .choose_multiple(thread_rng, outbound_count) // Randomly select about half from outbound
-            .into_iter() // Then select the rest from inbound
-            .chain(peers.values().filter(|peer| !peer.is_outbound()).cloned().choose_multiple(thread_rng, inbound_count))
+        outbound_peers
+            .into_iter()
+            .choose_multiple(thread_rng, outbound_count)
+            .into_iter()
+            .chain(selected_inbound.into_iter().choose_multiple(thread_rng, inbound_count))
     }
 
     /// Send a message to a specific peer
