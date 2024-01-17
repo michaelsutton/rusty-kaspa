@@ -88,13 +88,14 @@ impl Hub {
     /// Selects a random subset of peers, trying to select at least half for outbound when possible
     fn select_some_peers(&self, num_peers: usize) -> impl Iterator<Item = Arc<Router>> {
         let thread_rng = &mut rand::thread_rng();
-        let peers = self.peers.read();
 
         // We expect num_peers ~= num of outbound << num of inbound, so we collect the outbound while
         // we iterate the full list of peers choosing num_peers random peers from inbound. This way we
         // iterate the full map only once and all our following operations are O(num_peers)
         let mut outbound_peers = Vec::with_capacity(num_peers);
-        let selected_inbound = peers
+        let sampled_inbound = self
+            .peers
+            .read()
             .values()
             .filter(|&peer| {
                 if peer.is_outbound() {
@@ -109,7 +110,7 @@ impl Hub {
 
         // Now we calculate the exact number of peers to select from inbound/outbound
         let total_outbound = outbound_peers.len();
-        let total_inbound = peers.len() - total_outbound;
+        let total_inbound = sampled_inbound.len();
         let mut outbound_count = ((num_peers + 1) / 2).min(total_outbound);
 
         // If there won't be enough inbound peers to meet the num_peers after we've selected only half for outbound,
@@ -124,7 +125,7 @@ impl Hub {
             .into_iter()
             .choose_multiple(thread_rng, outbound_count)
             .into_iter()
-            .chain(selected_inbound.into_iter().choose_multiple(thread_rng, inbound_count))
+            .chain(sampled_inbound.into_iter().choose_multiple(thread_rng, inbound_count))
     }
 
     /// Send a message to a specific peer
