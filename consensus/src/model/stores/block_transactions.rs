@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use kaspa_consensus_core::tx::{TransactionInput, TransactionOutput};
 use kaspa_consensus_core::{tx::Transaction, BlockHasher};
 use kaspa_database::prelude::CachePolicy;
@@ -9,6 +10,7 @@ use kaspa_hashes::Hash;
 use kaspa_utils::mem_size::MemSizeEstimator;
 use rocksdb::WriteBatch;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::mem::size_of;
 use std::sync::Arc;
 
@@ -72,6 +74,10 @@ impl DbBlockTransactionsStore {
 
     pub fn delete_batch(&self, batch: &mut WriteBatch, hash: Hash) -> Result<(), StoreError> {
         self.access.delete(BatchDbWriter::new(batch), hash)
+    }
+
+    pub fn iterator(&self) -> impl Iterator<Item = Result<(Box<[u8]>, Arc<Vec<Transaction>>), Box<dyn Error>>> + '_ {
+        self.access.iterator().map_ok(|b| (b.0, b.1 .0))
     }
 }
 
