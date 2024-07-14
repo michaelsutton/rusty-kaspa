@@ -56,10 +56,17 @@ impl<T: HeaderStoreReader, U: ReachabilityStoreReader, V: RelationsStoreReader> 
         let origin_children_headers =
             origin_children.iter().copied().map(|parent| self.headers_store.get_header(parent).unwrap()).collect_vec();
 
-        let mut parents = Vec::with_capacity(self.max_block_level as usize);
+        // First, handle the genesis parent case. This avoids the need to check this possibility within the loop below.
+        if direct_parents == [self.genesis_hash] {
+            return vec![vec![self.genesis_hash]];
+        }
+
+        // Full capacity of max levels is unexpected
+        let mut parents = Vec::with_capacity(self.max_block_level as usize / 2);
 
         for block_level in 0..self.max_block_level {
             if direct_parent_headers.iter().all(|h| block_level <= h.block_level) {
+                // Optimize the common case where lower levels are identical to level 0
                 parents.push(direct_parents.iter().copied().collect_vec());
                 continue;
             }
