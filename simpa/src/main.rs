@@ -314,7 +314,7 @@ fn apply_args_to_consensus_params(args: &Args, params: &mut Params) {
         params.legacy_timestamp_deviation_tolerance = 16;
         params.new_timestamp_deviation_tolerance = 16;
         params.sampled_difficulty_window_size = params.sampled_difficulty_window_size.min(32);
-        params.finality_depth = 128;
+        params.finality_depth = 512;
         params.merge_depth = 128;
         params.mergeset_size_limit = 32;
         params.pruning_depth = params.anticone_finalization_depth();
