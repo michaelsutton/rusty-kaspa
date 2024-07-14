@@ -59,6 +59,10 @@ impl<T: HeaderStoreReader, U: ReachabilityStoreReader, V: RelationsStoreReader> 
         let mut parents = Vec::with_capacity(self.max_block_level as usize);
 
         for block_level in 0..self.max_block_level {
+            if direct_parent_headers.iter().all(|h| block_level <= h.block_level) {
+                parents.push(direct_parents.iter().copied().collect_vec());
+                continue;
+            }
             // Direct parents are guaranteed to be in one another's anticones so add them all to
             // all the block levels they occupy.
             let mut level_candidates_to_reference_blocks = direct_parent_headers
