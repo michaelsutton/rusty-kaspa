@@ -12,7 +12,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use kaspa_math::int::SignedInteger;
+// use kaspa_math::int::SignedInteger;
 use parking_lot::{Mutex, RwLock};
 use rocksdb::WriteBatch;
 
@@ -638,7 +638,7 @@ impl PruningProofManager {
         let ghostdag_stores = stores_and_processes.ghostdag_stores;
 
         let pruning_read = self.pruning_point_store.read();
-        let relations_read = self.relations_stores.read();
+        // let relations_read = self.relations_stores.read();
         let current_pp = pruning_read.get().unwrap().pruning_point;
         let current_pp_header = self.headers_store.get_header_with_block_level(current_pp).unwrap();
 
@@ -682,16 +682,16 @@ impl PruningProofManager {
                     None,
                     false,
                 );
-                let common_ancestor_blue_work = ghostdag_stores[level_idx].get_blue_work(common_ancestor).unwrap();
-                let selected_tip_blue_work_diff =
-                    SignedInteger::from(proof_selected_tip_gd.blue_work) - SignedInteger::from(common_ancestor_blue_work);
-                for parent in self.parents_manager.parents_at_level(&current_pp_header.header, level).iter().copied() {
-                    let parent_blue_work = ghostdag_stores[level_idx].get_blue_work(parent).unwrap();
-                    let parent_blue_work_diff = SignedInteger::from(parent_blue_work) - SignedInteger::from(common_ancestor_blue_work);
-                    if parent_blue_work_diff >= selected_tip_blue_work_diff {
-                        return Err(PruningImportError::PruningProofInsufficientBlueWork);
-                    }
-                }
+                // let common_ancestor_blue_work = ghostdag_stores[level_idx].get_blue_work(common_ancestor).unwrap();
+                // let selected_tip_blue_work_diff =
+                //     SignedInteger::from(proof_selected_tip_gd.blue_work) - SignedInteger::from(common_ancestor_blue_work);
+                // for parent in self.parents_manager.parents_at_level(&current_pp_header.header, level).iter().copied() {
+                //     let parent_blue_work = ghostdag_stores[level_idx].get_blue_work(parent).unwrap();
+                //     let parent_blue_work_diff = SignedInteger::from(parent_blue_work) - SignedInteger::from(common_ancestor_blue_work);
+                //     if parent_blue_work_diff >= selected_tip_blue_work_diff {
+                //         return Err(PruningImportError::PruningProofInsufficientBlueWork);
+                //     }
+                // }
 
                 return Ok(());
             }
@@ -716,25 +716,27 @@ impl PruningProofManager {
                 continue;
             }
 
-            match relations_read[level_idx].get_parents(current_pp).unwrap_option() {
-                Some(parents) => {
-                    if parents
-                        .iter()
-                        .copied()
-                        .any(|parent| ghostdag_stores[level_idx].get_blue_score(parent).unwrap() < 2 * self.pruning_proof_m)
-                    {
-                        return Ok(());
-                    }
-                }
-                None => {
-                    // If the current pruning point doesn't have a parent at this level, we consider the proof state to be better.
-                    return Ok(());
-                }
-            }
+            return Ok(());
+
+            // match relations_read[level_idx].get_parents(current_pp).unwrap_option() {
+            //     Some(parents) => {
+            //         if parents
+            //             .iter()
+            //             .copied()
+            //             .any(|parent| ghostdag_stores[level_idx].get_blue_score(parent).unwrap() < 2 * self.pruning_proof_m)
+            //         {
+            //             return Ok(());
+            //         }
+            //     }
+            //     None => {
+            //         // If the current pruning point doesn't have a parent at this level, we consider the proof state to be better.
+            //         return Ok(());
+            //     }
+            // }
         }
 
         drop(pruning_read);
-        drop(relations_read);
+        // drop(relations_read);
         drop(stores_and_processes.db_lifetime);
 
         Err(PruningImportError::PruningProofNotEnoughHeaders)

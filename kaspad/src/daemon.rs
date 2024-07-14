@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, process::exit, sync::Arc, time::Duration};
 use async_channel::unbounded;
 use kaspa_consensus_core::{
     config::ConfigBuilder,
-    errors::config::{ConfigError, ConfigResult},
+    errors::config::{ConfigError, ConfigResult}, network::{NetworkId, NetworkType},
 };
 use kaspa_consensus_notify::{root::ConsensusNotificationRoot, service::NotifyService};
 use kaspa_core::{core::Core, info, trace};
@@ -204,6 +204,7 @@ pub fn create_core(args: Args, fd_total_budget: i32) -> (Arc<Core>, Arc<RpcCoreS
 ///
 pub fn create_core_with_runtime(runtime: &Runtime, args: &Args, fd_total_budget: i32) -> (Arc<Core>, Arc<RpcCoreService>) {
     let network = args.network();
+    assert_ne!(network.network_type(), NetworkType::Mainnet, "Experimental version; Mainnet is disallowed");
     let mut fd_remaining = fd_total_budget;
     let utxo_files_limit = if args.utxoindex {
         let utxo_files_limit = fd_remaining * 10 / 100;
