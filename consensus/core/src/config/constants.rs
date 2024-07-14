@@ -113,11 +113,11 @@ pub mod perf {
     use crate::config::params::Params;
 
     /// The default target depth for reachability reindexes.
-    pub const DEFAULT_REINDEX_DEPTH: u64 = 100;
+    pub const DEFAULT_REINDEX_DEPTH: u64 = 1000;
 
     /// The default slack interval used by the reachability
     /// algorithm to encounter for blocks out of the selected chain.
-    pub const DEFAULT_REINDEX_SLACK: u64 = 1 << 12;
+    pub const DEFAULT_REINDEX_SLACK: u64 = 1 << 14;
 
     const BASELINE_HEADER_DATA_CACHE_SIZE: usize = 10_000;
     const BASELINE_BLOCK_DATA_CACHE_SIZE: usize = 200;
