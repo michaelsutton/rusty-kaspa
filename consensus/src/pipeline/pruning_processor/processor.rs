@@ -228,12 +228,14 @@ impl PruningProcessor {
         info!("Verifying the new pruning point UTXO commitment (sanity test)");
         let commitment = self.headers_store.get_header(pruning_point).unwrap().utxo_commitment;
         let mut multiset = MuHash::new();
+        let mut count = 0;
         let pruning_utxoset_read = self.pruning_utxoset_stores.read();
         for (outpoint, entry) in pruning_utxoset_read.utxo_set.iterator().map(|r| r.unwrap()) {
             multiset.add_utxo(&outpoint, &entry);
+            count += 1;
         }
         assert_eq!(multiset.finalize(), commitment, "Updated pruning point utxo set does not match the header utxo commitment");
-        info!("Pruning point UTXO commitment was verified correctly (sanity test)");
+        info!("Pruning point UTXO commitment was verified correctly over {} UTXO entries (sanity test)", count);
     }
 
     fn prune(&self, new_pruning_point: Hash) {
