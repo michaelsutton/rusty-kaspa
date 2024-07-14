@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use kaspa_consensus_core::BlueWorkType;
-use kaspa_core::warn;
+use kaspa_core::debug;
 use kaspa_hashes::Hash;
 use kaspa_math::Uint192;
 use serde::{Deserialize, Serialize};
@@ -66,7 +66,7 @@ impl<T: GhostdagStoreReader, S: RelationsStoreReader, U: ReachabilityService, V:
             // 3) make relations store only return parents at the same or higher level
             //    - we know that realtions.get_parents can return parents in one level lower
             blue_work: self.ghostdag_store.get_blue_work(*block).unwrap_or_else(|_| {
-                warn!("Tried getting blue work of hash not in GD store: {}", block);
+                debug!("Tried getting blue work of hash not in GD store: {}", block);
                 Uint192::from_u64(0)
             }),
         });
