@@ -83,17 +83,17 @@ impl ConsensusStorage {
         // Lower and upper bounds
         let pruning_depth = params.pruning_depth as usize;
         let pruning_size_for_caches = (params.pruning_depth + params.finality_depth) as usize; // Upper bound for any block/header related data
-        let level_lower_bound = 2 * params.pruning_proof_m as usize; // Number of items lower bound for level-related caches
+        let level_lower_bound = 4 * params.pruning_proof_m as usize; // Number of items lower bound for level-related caches
 
         // Budgets in bytes. All byte budgets overall sum up to ~1GB of memory (which obviously takes more low level alloc space)
         let daa_excluded_budget = scaled(30_000_000);
         let statuses_budget = scaled(30_000_000);
-        let reachability_data_budget = scaled(20_000_000);
-        let reachability_sets_budget = scaled(20_000_000); // x 2 for tree children and future covering set
+        let reachability_data_budget = scaled(200_000_000);
+        let reachability_sets_budget = scaled(200_000_000); // x 2 for tree children and future covering set
         let ghostdag_compact_budget = scaled(15_000_000);
         let headers_compact_budget = scaled(5_000_000);
-        let parents_budget = scaled(40_000_000); // x 3 for reachability and levels
-        let children_budget = scaled(5_000_000); // x 3 for reachability and levels
+        let parents_budget = scaled(80_000_000); // x 3 for reachability and levels
+        let children_budget = scaled(20_000_000); // x 3 for reachability and levels
         let ghostdag_budget = scaled(80_000_000); // x 2 for levels
         let headers_budget = scaled(80_000_000);
         let transactions_budget = scaled(40_000_000);
