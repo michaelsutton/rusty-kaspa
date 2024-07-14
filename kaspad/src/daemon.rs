@@ -3,7 +3,8 @@ use std::{fs, path::PathBuf, process::exit, sync::Arc, time::Duration};
 use async_channel::unbounded;
 use kaspa_consensus_core::{
     config::ConfigBuilder,
-    errors::config::{ConfigError, ConfigResult}, network::{NetworkId, NetworkType},
+    errors::config::{ConfigError, ConfigResult},
+    network::NetworkType,
 };
 use kaspa_consensus_notify::{root::ConsensusNotificationRoot, service::NotifyService};
 use kaspa_core::{core::Core, info, trace};
