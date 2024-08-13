@@ -3078,6 +3078,7 @@ dependencies = [
  "ipnet",
  "itertools 0.11.0",
  "log",
+ "once_cell",
  "parking_lot",
  "rand 0.8.5",
  "rlimit",
