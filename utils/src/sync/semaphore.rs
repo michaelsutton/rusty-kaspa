@@ -11,12 +11,30 @@ mod trace {
 
     use once_cell::sync::Lazy;
     use std::time::SystemTime;
+    use std::ops::Deref;
+    use crate::sync::semaphore::Semaphore;
 
     static SYS_START: Lazy<SystemTime> = Lazy::new(SystemTime::now);
 
     #[inline]
     pub(super) fn sys_now() -> u64 {
         SystemTime::now().duration_since(*SYS_START).unwrap_or_default().as_micros() as u64
+    }
+
+    impl Deref for Semaphore {
+        type Target = TraceInner;
+        fn deref(&self) -> &Self::Target {
+            &self.trace_inner
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct TraceInner {
+        pub(super) readers_start: AtomicU64,
+        pub(super) readers_end: AtomicU64,
+        pub(super) readers_time: AtomicU64,
+        pub(super) log_time: AtomicU64,
+        pub(super) log_value: AtomicU64,
     }
 }
 
@@ -39,31 +57,19 @@ pub(crate) struct Semaphore {
     counter: AtomicUsize,
     signal: Event,
     #[cfg(feature = "semaphore-trace")]
-    readers_start: AtomicU64,
-    #[cfg(feature = "semaphore-trace")]
-    readers_end: AtomicU64,
-    #[cfg(feature = "semaphore-trace")]
-    readers_time: AtomicU64,
-    #[cfg(feature = "semaphore-trace")]
-    log_time: AtomicU64,
-    #[cfg(feature = "semaphore-trace")]
-    log_value: AtomicU64,
+    trace_inner: TraceInner,
 }
 
 impl Semaphore {
     pub const MAX_PERMITS: usize = usize::MAX;
 
-    pub const fn new(available_permits: usize) -> Semaphore {
+    pub fn new(available_permits: usize) -> Semaphore {
         cfg_if::cfg_if! {
             if #[cfg(feature = "semaphore-trace")] {
                 Semaphore {
                     counter: AtomicUsize::new(available_permits),
                     signal: Event::new(),
-                    readers_start: AtomicU64::new(0),
-                    readers_end: AtomicU64::new(0),
-                    readers_time: AtomicU64::new(0),
-                    log_time: AtomicU64::new(0),
-                    log_value: AtomicU64::new(0),
+                    trace_inner: Default::default(),
                 }
             } else {
                 Semaphore {
