@@ -9,10 +9,10 @@ mod trace {
     pub(super) use log::debug;
     pub(super) use std::sync::atomic::AtomicU64;
 
-    use once_cell::sync::Lazy;
-    use std::time::SystemTime;
-    use std::ops::Deref;
     use crate::sync::semaphore::Semaphore;
+    use once_cell::sync::Lazy;
+    use std::ops::Deref;
+    use std::time::SystemTime;
 
     static SYS_START: Lazy<SystemTime> = Lazy::new(SystemTime::now);
 
