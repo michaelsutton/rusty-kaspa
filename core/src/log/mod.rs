@@ -24,12 +24,15 @@ pub fn set_log_level(level: LevelFilter) {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn init_logger(log_dir: Option<&str>, filters: &str) {
     use crate::log::appender::AppenderSpec;
+    use appender::KeywordAppenderSpec;
     use log4rs::{config::Root, Config};
     use std::iter::once;
 
     const CONSOLE_APPENDER: &str = "stdout";
     const LOG_FILE_APPENDER: &str = "log_file";
     const ERR_LOG_FILE_APPENDER: &str = "err_log_file";
+    const MEMPOOL_STATS_LOG_FILE_APPENDER: &str = "mempool_stats_log_file";
+    pub const MEMPOOL_STATS_LOG_FILE_NAME: &str = "mempool-stats.log";
 
     let level = LevelFilter::Info;
     let loggers = logger::Builder::new().root_level(level).parse_env(DEFAULT_LOGGER_ENV).parse_expression(filters).build();
@@ -38,14 +41,25 @@ pub fn init_logger(log_dir: Option<&str>, filters: &str) {
     let mut file_appender = log_dir.map(|x| AppenderSpec::roller(LOG_FILE_APPENDER, None, x, LOG_FILE_NAME));
     let mut err_file_appender =
         log_dir.map(|x| AppenderSpec::roller(ERR_LOG_FILE_APPENDER, Some(LevelFilter::Warn), x, ERR_LOG_FILE_NAME));
-    let appenders = once(&mut stdout_appender).chain(&mut file_appender).chain(&mut err_file_appender).map(|x| x.appender());
+    let mut mempool_stats_file_appender =
+        log_dir.map(|x| KeywordAppenderSpec::roller(MEMPOOL_STATS_LOG_FILE_APPENDER, None, x, MEMPOOL_STATS_LOG_FILE_NAME));
+    let appenders = once(stdout_appender.appender())
+        .chain(file_appender.as_mut().map(|x| x.appender()))
+        .chain(err_file_appender.as_mut().map(|x| x.appender()))
+        .chain(mempool_stats_file_appender.as_mut().map(|x| x.appender()));
 
     let config = Config::builder()
         .appenders(appenders)
         .loggers(loggers.items())
         .build(
             Root::builder()
-                .appenders(once(&stdout_appender).chain(&file_appender).chain(&err_file_appender).map(|x| x.name))
+                .appenders(
+                    once(&stdout_appender)
+                        .chain(&file_appender)
+                        .chain(&err_file_appender)
+                        .map(|x| x.name)
+                        .chain(mempool_stats_file_appender.as_ref().map(|x| x.name)),
+                )
                 .build(loggers.root_level()),
         )
         .unwrap();

@@ -68,6 +68,7 @@ impl MiningMonitor {
                 );
                 let feerate_estimations = self.mining_manager.clone().get_realtime_feerate_estimations().await;
                 debug!("Realtime feerate estimations: {}", feerate_estimations);
+                info!("mempool_stats{}", feerate_estimations);
             }
             if delta.tx_evicted_counts > 0 {
                 info!(
