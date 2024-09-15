@@ -1,5 +1,6 @@
 use super::MiningCounters;
 use crate::manager::MiningManagerProxy;
+use kaspa_consensusmanager::ConsensusManager;
 use kaspa_core::{
     debug, info,
     task::{
@@ -14,6 +15,8 @@ use std::{sync::Arc, time::Duration};
 const MONITOR: &str = "mempool-monitor";
 
 pub struct MiningMonitor {
+    consensus_manager: Arc<ConsensusManager>,
+
     mining_manager: MiningManagerProxy,
 
     // Counters
@@ -27,23 +30,54 @@ pub struct MiningMonitor {
 
 impl MiningMonitor {
     pub fn new(
+        consensus_manager: Arc<ConsensusManager>,
         mining_manager: MiningManagerProxy,
         counters: Arc<MiningCounters>,
         tx_script_cache_counters: Arc<TxScriptCacheCounters>,
         tick_service: Arc<TickService>,
     ) -> MiningMonitor {
-        MiningMonitor { mining_manager, counters, tx_script_cache_counters, tick_service }
+        MiningMonitor { consensus_manager, mining_manager, counters, tx_script_cache_counters, tick_service }
     }
 
     pub async fn worker(self: &Arc<MiningMonitor>) {
         let mut last_snapshot = self.counters.snapshot();
         let mut last_tx_script_cache_snapshot = self.tx_script_cache_counters.snapshot();
-        let snapshot_interval = 10;
+        let snapshot_interval = 1;
+        let mut i = 0u64;
         loop {
             if let TickReason::Shutdown = self.tick_service.tick(Duration::from_secs(snapshot_interval)).await {
                 // Let the system print final logs before exiting
                 tokio::time::sleep(Duration::from_millis(500)).await;
                 break;
+            }
+
+            let consensus = self.consensus_manager.consensus().unguarded_session();
+            let response = self
+                .mining_manager
+                .clone()
+                .get_realtime_feerate_estimations_verbose(&consensus, kaspa_addresses::Prefix::Mainnet)
+                .await
+                .unwrap();
+            debug!(
+                "mempool_stats{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
+                response.estimations.priority_bucket.feerate,
+                response.estimations.priority_bucket.estimated_seconds,
+                response.estimations.normal_buckets[0].feerate,
+                response.estimations.normal_buckets[0].estimated_seconds,
+                response.estimations.normal_buckets[1].feerate,
+                response.estimations.normal_buckets[1].estimated_seconds,
+                response.estimations.low_buckets[0].feerate,
+                response.estimations.low_buckets[0].estimated_seconds,
+                response.mempool_ready_transactions_count,
+                response.mempool_ready_transactions_total_mass,
+                response.next_block_template_feerate_min,
+                response.next_block_template_feerate_median,
+                response.next_block_template_feerate_max,
+            );
+
+            i = i.overflowing_add(1).0;
+            if i % 10 != 0 {
+                continue;
             }
 
             let snapshot = self.counters.snapshot();
@@ -66,9 +100,7 @@ impl MiningMonitor {
                     delta.low_priority_tx_counts,
                     delta.tx_accepted_counts,
                 );
-                let feerate_estimations = self.mining_manager.clone().get_realtime_feerate_estimations().await;
-                debug!("Realtime feerate estimations: {}", feerate_estimations);
-                info!("mempool_stats{}", feerate_estimations);
+                debug!("Realtime feerate estimations: {}", response.estimations);
             }
             if delta.tx_evicted_counts > 0 {
                 info!(
