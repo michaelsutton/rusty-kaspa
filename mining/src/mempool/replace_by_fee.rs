@@ -8,6 +8,7 @@ use kaspa_consensus_core::{
     constants::SOMPI_PER_KASPA,
     tx::{MutableTransaction, Transaction},
 };
+use kaspa_core::warn;
 use std::sync::Arc;
 
 impl Mempool {
@@ -165,7 +166,9 @@ impl Mempool {
         {
             if transaction_feerate > double_spend_feerate {
                 if transaction.calculated_fee.unwrap() > SOMPI_PER_KASPA * 50 && transaction_feerate > double_spend_feerate * 2.0 {
-                    return Err(RuleError::RejectRbfUserError(transaction.id(), transaction.calculated_fee.unwrap()));
+                    let err = RuleError::RejectRbfUserError(transaction.id(), transaction.calculated_fee.unwrap());
+                    warn!("Mempool RBF high fee guard: {err} ({}, {})", transaction_feerate, double_spend_feerate);
+                    return Err(err);
                 }
                 return Ok(owner);
             } else {
