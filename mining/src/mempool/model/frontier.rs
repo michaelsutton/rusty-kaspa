@@ -220,7 +220,7 @@ impl Frontier {
         let mut estimator = FeerateEstimator::new(self.total_weight(), inclusion_interval);
 
         // Search for better estimators by possibly removing extremely high outliers
-        let mut down_iter = self.search_tree.descending_iter().peekable();
+        let mut down_iter = self.search_tree.descending_iter().filter(|k| !k.is_priority()).peekable();
         while let Some(current) = down_iter.next() {
             // Update values for the coming iteration. In order to remove the outlier from the
             // total weight, we must compensate by capturing a block slot. Note we capture the

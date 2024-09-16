@@ -2,9 +2,13 @@ use crate::{block_template::selector::ALPHA, mempool::model::tx::MempoolTransact
 use kaspa_consensus_core::tx::Transaction;
 use std::sync::Arc;
 
+pub(crate) const FEERATE_PRIORITY_FEE_CONST: u64 = kaspa_consensus_core::constants::SOMPI_PER_KASPA * 1000;
+
 #[derive(Clone, Debug)]
 pub struct FeerateTransactionKey {
     pub fee: u64,
+    // Artificial priority fee, used to promote local txs into the block template
+    priority_fee: u64,
     pub mass: u64,
     weight: f64,
     pub tx: Arc<Transaction>,
@@ -23,11 +27,21 @@ impl FeerateTransactionKey {
         // NOTE: any change to the way this weight is calculated (such as scaling by some factor)
         // requires a reversed update to total_weight in `Frontier::build_feerate_estimator`. This
         // is because the math methods in FeeEstimator assume this specific weight function.
-        Self { fee, mass, weight: (fee as f64 / mass as f64).powi(ALPHA), tx }
+        Self { fee, priority_fee: fee, mass, weight: (fee as f64 / mass as f64).powi(ALPHA), tx }
+    }
+
+    /// Hack: increase weight so that RPC txs are selected by the inplace sampling algo
+    pub fn priority(fee: u64, mass: u64, tx: Arc<Transaction>) -> Self {
+        let priority_fee = fee.max(FEERATE_PRIORITY_FEE_CONST);
+        Self { fee, priority_fee, mass, weight: (priority_fee as f64 / mass as f64).powi(ALPHA), tx }
+    }
+
+    pub fn is_priority(&self) -> bool {
+        self.fee != self.priority_fee
     }
 
     pub fn feerate(&self) -> f64 {
-        self.fee as f64 / self.mass as f64
+        self.priority_fee as f64 / self.mass as f64
     }
 
     pub fn weight(&self) -> f64 {
@@ -59,7 +73,7 @@ impl Ord for FeerateTransactionKey {
         }
 
         // If feerates (and thus weights) are equal, prefer the higher fee in absolute value
-        match self.fee.cmp(&other.fee) {
+        match self.priority_fee.cmp(&other.priority_fee) {
             core::cmp::Ordering::Equal => {}
             ord => return ord,
         }
@@ -80,7 +94,10 @@ impl From<&MempoolTransaction> for FeerateTransactionKey {
         let mass = tx.mtx.tx.mass();
         let fee = tx.mtx.calculated_fee.expect("fee is expected to be populated");
         assert_ne!(mass, 0, "mass field is expected to be set when inserting to the mempool");
-        Self::new(fee, mass, tx.mtx.tx.clone())
+        match tx.priority {
+            crate::mempool::tx::Priority::Low => Self::new(fee, mass, tx.mtx.tx.clone()),
+            crate::mempool::tx::Priority::High => Self::priority(fee, mass, tx.mtx.tx.clone()),
+        }
     }
 }
 
