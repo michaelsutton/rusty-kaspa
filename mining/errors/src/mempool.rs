@@ -81,6 +81,9 @@ pub enum RuleError {
 
     #[error("Rejected tx {0} from mempool due to incomputable storage mass")]
     RejectStorageMassIncomputable(TransactionId),
+
+    #[error("Rejected RBF tx {0} from the mempool for having an unreasonably high fee of {1} sompi, indicating a possible user error. Use fee <= 50 KAS, or increase over previous feerate by 2x at most.")]
+    RejectRbfUserError(TransactionId, u64),
 }
 
 impl From<NonStandardError> for RuleError {

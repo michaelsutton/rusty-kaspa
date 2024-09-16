@@ -4,7 +4,10 @@ use crate::mempool::{
     tx::RbfPolicy,
     Mempool,
 };
-use kaspa_consensus_core::tx::{MutableTransaction, Transaction};
+use kaspa_consensus_core::{
+    constants::SOMPI_PER_KASPA,
+    tx::{MutableTransaction, Transaction},
+};
 use std::sync::Arc;
 
 impl Mempool {
@@ -102,7 +105,11 @@ impl Mempool {
                 match double_spends.len() {
                     0 => Err(RuleError::RejectRbfNoDoubleSpend),
                     1 => {
-                        let removed = self.validate_double_spending_transaction(transaction, &double_spends[0])?.mtx.tx.clone();
+                        let removed = self
+                            .validate_double_spending_transaction_with_increase_limits(transaction, &double_spends[0])?
+                            .mtx
+                            .tx
+                            .clone();
                         self.remove_transaction(
                             &double_spends[0].owner_id,
                             true,
@@ -137,6 +144,29 @@ impl Mempool {
             (transaction.calculated_feerate(), owner.mtx.calculated_feerate())
         {
             if transaction_feerate > double_spend_feerate {
+                return Ok(owner);
+            } else {
+                return Err(double_spend.into());
+            }
+        }
+        // Getting here is unexpected since both txs should be populated with
+        // fee and mass at this stage but nonetheless we fail gracefully
+        Err(double_spend.into())
+    }
+
+    fn validate_double_spending_transaction_with_increase_limits<'a>(
+        &'a self,
+        transaction: &MutableTransaction,
+        double_spend: &DoubleSpend,
+    ) -> RuleResult<&'a MempoolTransaction> {
+        let owner = self.transaction_pool.get_double_spend_owner(double_spend)?;
+        if let (Some(transaction_feerate), Some(double_spend_feerate)) =
+            (transaction.calculated_feerate(), owner.mtx.calculated_feerate())
+        {
+            if transaction_feerate > double_spend_feerate {
+                if transaction.calculated_fee.unwrap() > SOMPI_PER_KASPA * 50 && transaction_feerate > double_spend_feerate * 2.0 {
+                    return Err(RuleError::RejectRbfUserError(transaction.id(), transaction.calculated_fee.unwrap()));
+                }
                 return Ok(owner);
             } else {
                 return Err(double_spend.into());
