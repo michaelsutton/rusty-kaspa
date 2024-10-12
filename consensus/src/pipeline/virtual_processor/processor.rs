@@ -778,20 +778,10 @@ impl VirtualStateProcessor {
         let virtual_utxo_view = &virtual_read.utxo_set;
         let virtual_daa_score = virtual_state.daa_score;
         let virtual_past_median_time = virtual_state.past_median_time;
-        if mutable_tx.tx.inputs.len() > 1 {
-            // use pool to apply par_iter to inputs
-            self.thread_pool.install(|| {
-                self.validate_mempool_transaction_impl(
-                    mutable_tx,
-                    virtual_utxo_view,
-                    virtual_daa_score,
-                    virtual_past_median_time,
-                    args,
-                )
-            })
-        } else {
+        // Run within the thread pool since par_iter might be internally applied to inputs
+        self.thread_pool.install(|| {
             self.validate_mempool_transaction_impl(mutable_tx, virtual_utxo_view, virtual_daa_score, virtual_past_median_time, args)
-        }
+        })
     }
 
     pub fn validate_mempool_transactions_in_parallel(
@@ -1107,7 +1097,7 @@ impl VirtualStateProcessor {
 
         // Validate transactions of the pruning point itself
         let new_pruning_point_transactions = self.block_transactions_store.get(new_pruning_point).unwrap();
-        let (validated_transactions, _) = self.validate_transactions_in_parallel(
+        let validated_transactions = self.validate_transactions_in_parallel(
             &new_pruning_point_transactions,
             &virtual_read.utxo_set,
             new_pruning_point_header.daa_score,
