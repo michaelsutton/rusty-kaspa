@@ -12,7 +12,9 @@ pub struct Header {
     pub hash: Hash,
     pub version: u16,
     pub parents_by_level: Vec<Vec<Hash>>,
+    /// The Merkle root of transactions included in this block.
     pub hash_merkle_root: Hash,
+    /// The Merkle root of transactions accepted by this block (from its pov as chain block)
     pub accepted_id_merkle_root: Hash,
     pub utxo_commitment: Hash,
     /// Timestamp is in milliseconds
