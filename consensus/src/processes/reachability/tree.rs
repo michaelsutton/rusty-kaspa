@@ -126,9 +126,6 @@ pub fn try_advancing_reindex_root(
         return Ok(());
     }
 
-    // if ancestor == next {
-    //     trace!("next reindex root is an ancestor of current one, skipping concentration.")
-    // }
     while ancestor != next {
         let child = get_next_chain_ancestor_unchecked(store, next, ancestor)?;
         let mut ctx = ReindexOperationContext::new(store, reindex_depth, reindex_slack);
