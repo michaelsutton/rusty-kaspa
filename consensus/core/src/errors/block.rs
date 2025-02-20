@@ -37,6 +37,9 @@ pub enum RuleError {
     #[error("block has no parents")]
     NoParents,
 
+    #[error("the first parent {0} is not the selected parent {1}")]
+    FirstParentNotSelectedParent(Hash, Hash),
+
     #[error("block has too many parents: got {0} when the limit is {1}")]
     TooManyParents(usize, usize),
 

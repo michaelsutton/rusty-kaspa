@@ -298,6 +298,7 @@ impl VirtualStateProcessor {
             self.sink_search_algorithm(&virtual_read, &mut accumulated_diff, prev_sink, tips, finality_point, pruning_point);
         let (virtual_parents, virtual_ghostdag_data) = self.pick_virtual_parents(new_sink, virtual_parent_candidates, pruning_point);
         assert_eq!(virtual_ghostdag_data.selected_parent, new_sink);
+        assert_eq!(virtual_parents[0], new_sink);
 
         let sink_multiset = self.utxo_multisets_store.get(new_sink).unwrap();
         let chain_path = self.dag_traversal_manager.calculate_chain_path(prev_sink, new_sink, None);
@@ -795,7 +796,7 @@ impl VirtualStateProcessor {
         }
 
         if !bad_reds.is_empty() {
-            // Remove all parents which lead to merging a bad red
+            // Remove all parents which lead to merging a bad red. Note this can never lead to removal of the selected parent.
             virtual_parents.retain(|&h| !self.reachability_service.is_any_dag_ancestor(&mut bad_reds.iter().copied(), h));
             // Recompute ghostdag data since parents changed
             ghostdag_data = self.ghostdag_manager.ghostdag(&virtual_parents);
@@ -1035,7 +1036,7 @@ impl VirtualStateProcessor {
         txs.insert(0, coinbase.tx);
         let version = BLOCK_VERSION;
         let parents_by_level = self.parents_manager.calc_block_parents(pruning_info.pruning_point, &virtual_state.parents);
-
+        assert_eq!(parents_by_level[0][0], virtual_state.ghostdag_data.selected_parent);
         // Hash according to hardfork activation
         let storage_mass_activated = self.crescendo_activation.is_active(virtual_state.daa_score);
         let hash_merkle_root = calc_hash_merkle_root(txs.iter(), storage_mass_activated);

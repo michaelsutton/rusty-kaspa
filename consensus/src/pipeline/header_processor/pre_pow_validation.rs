@@ -7,6 +7,7 @@ use kaspa_consensus_core::header::Header;
 impl HeaderProcessor {
     pub(super) fn pre_pow_validation(&self, ctx: &mut HeaderProcessingContext, header: &Header) -> BlockProcessResult<()> {
         self.check_parents_limit(ctx, header)?;
+        self.check_first_parent_is_selected_parent(ctx, header)?;
         self.check_pruning_violation(ctx)?;
         self.check_difficulty_and_daa_score(ctx, header)?;
         Ok(())
@@ -23,6 +24,16 @@ impl HeaderProcessor {
             return Err(RuleError::TooManyParents(header.direct_parents().len(), max_block_parents));
         }
 
+        Ok(())
+    }
+
+    fn check_first_parent_is_selected_parent(&self, ctx: &mut HeaderProcessingContext, header: &Header) -> BlockProcessResult<()> {
+        // Note that direct parents was verified not to be empty (see check_parents_limit)
+        if self.crescendo_activation.is_active(ctx.selected_parent_daa_score())
+            && header.direct_parents()[0] != ctx.ghostdag_data().selected_parent
+        {
+            return Err(RuleError::FirstParentNotSelectedParent(header.direct_parents()[0], ctx.ghostdag_data().selected_parent));
+        }
         Ok(())
     }
 

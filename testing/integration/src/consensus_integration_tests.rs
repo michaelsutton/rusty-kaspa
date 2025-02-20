@@ -1342,8 +1342,10 @@ async fn bounded_merge_depth_test() {
 #[tokio::test]
 async fn difficulty_test() {
     init_allocator_with_default_settings();
-    async fn add_block(consensus: &TestConsensus, block_time: Option<u64>, parents: Vec<Hash>) -> Header {
+    async fn add_block(consensus: &TestConsensus, block_time: Option<u64>, mut parents: Vec<Hash>) -> Header {
         let selected_parent = consensus.ghostdag_manager().find_selected_parent(parents.iter().copied());
+        let pos = parents.iter().position(|&h| selected_parent == h).unwrap();
+        parents.swap(0, pos);
         let block_time = block_time.unwrap_or_else(|| {
             consensus.headers_store().get_timestamp(selected_parent).unwrap() + consensus.params().prior_target_time_per_block
         });
