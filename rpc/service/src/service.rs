@@ -369,9 +369,9 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         }
 
         // Make sure the pay address prefix matches the config network type
-        if request.pay_address.prefix != self.config.prefix() {
-            return Err(kaspa_addresses::AddressError::InvalidPrefix(request.pay_address.prefix.to_string()))?;
-        }
+        // if request.pay_address.prefix != self.config.prefix() {
+        //     return Err(kaspa_addresses::AddressError::InvalidPrefix(request.pay_address.prefix.to_string()))?;
+        // }
 
         // Build block template
         let script_public_key = kaspa_txscript::pay_to_address_script(&request.pay_address);
