@@ -679,6 +679,35 @@ pub const SIMNET_PARAMS: Params = Params {
     crescendo_activation: ForkActivation::always(),
 };
 
+pub const CRESCENDO_FAST_DEVNET: CrescendoParams = CrescendoParams {
+    past_median_time_sampled_window_size: MEDIAN_TIME_SAMPLED_WINDOW_SIZE,
+    sampled_difficulty_window_size: DIFFICULTY_SAMPLED_WINDOW_SIZE,
+
+    //
+    // ~~~~~~~~~~~~~~~~~~ BPS dependent constants ~~~~~~~~~~~~~~~~~~
+    //
+    target_time_per_block: TenBps::target_time_per_block(),
+    ghostdag_k: TenBps::ghostdag_k(),
+    past_median_time_sample_rate: TenBps::past_median_time_sample_rate(),
+    difficulty_sample_rate: TenBps::difficulty_adjustment_sample_rate(),
+    max_block_parents: TenBps::max_block_parents(),
+    mergeset_size_limit: TenBps::mergeset_size_limit(),
+    merge_depth: 600 * 10,    // 10M
+    finality_depth: 900 * 10, // 15M
+    pruning_depth: 5400 * 10, // 1.5H
+
+    coinbase_maturity: TenBps::coinbase_maturity(),
+
+    // Limit the cost of calculating compute/transient/storage masses
+    max_tx_inputs: 1000,
+    max_tx_outputs: 1000,
+    // Transient mass enforces a limit of 125Kb, however script engine max scripts size is 10Kb so there's no point in surpassing that.
+    max_signature_script_len: 10_000,
+    // Compute mass enforces a limit of ~45.5Kb, however script engine max scripts size is 10Kb so there's no point in surpassing that.
+    // Note that storage mass will kick in and gradually penalize also for lower lengths (generalized KIP-0009, plurality will be high).
+    max_script_public_key_len: 10_000,
+};
+
 pub const DEVNET_PARAMS: Params = Params {
     dns_seeders: &[],
     net: NetworkId::new(NetworkType::Devnet),
@@ -689,12 +718,12 @@ pub const DEVNET_PARAMS: Params = Params {
     max_difficulty_target: MAX_DIFFICULTY_TARGET,
     max_difficulty_target_f64: MAX_DIFFICULTY_TARGET_AS_F64,
     prior_difficulty_window_size: LEGACY_DIFFICULTY_WINDOW_SIZE,
-    min_difficulty_window_size: MIN_DIFFICULTY_WINDOW_SIZE,
+    min_difficulty_window_size: MIN_DIFFICULTY_WINDOW_SIZE / 10,
     prior_max_block_parents: 10,
-    prior_mergeset_size_limit: (LEGACY_DEFAULT_GHOSTDAG_K as u64) * 10,
-    prior_merge_depth: 3600,
-    prior_finality_depth: 86400,
-    prior_pruning_depth: 185798,
+    prior_mergeset_size_limit: 36,
+    prior_merge_depth: 600,     // 10M
+    prior_finality_depth: 1800, // 0.5H
+    prior_pruning_depth: 5400,  // 1.5H
     coinbase_payload_script_public_key_max_len: 150,
     max_coinbase_payload_len: 204,
 
@@ -727,6 +756,6 @@ pub const DEVNET_PARAMS: Params = Params {
     max_block_level: 250,
     pruning_proof_m: 1000,
 
-    crescendo: CRESCENDO,
-    crescendo_activation: ForkActivation::never(),
+    crescendo: CRESCENDO_FAST_DEVNET,
+    crescendo_activation: ForkActivation(9000), // 2.5H
 };
