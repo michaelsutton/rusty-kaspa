@@ -4984,6 +4984,7 @@ dependencies = [
  "kaspa-utils",
  "log",
  "parking_lot",
+ "rand",
  "rayon",
  "secp256k1",
  "tokio",

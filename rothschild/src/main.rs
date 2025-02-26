@@ -4,7 +4,7 @@ use clap::{Arg, ArgAction, Command};
 use itertools::Itertools;
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::{
-    config::params::TESTNET_PARAMS,
+    config::params::DEVNET_PARAMS,
     constants::{SOMPI_PER_KASPA, TX_VERSION},
     sign::sign,
     subnets::SUBNETWORK_ID_NATIVE,
@@ -26,7 +26,7 @@ use tokio::time::{interval, Instant, MissedTickBehavior};
 const DEFAULT_SEND_AMOUNT: u64 = 10 * SOMPI_PER_KASPA;
 const FEE_RATE: u64 = 10;
 const MILLIS_PER_TICK: u64 = 10;
-const ADDRESS_PREFIX: Prefix = Prefix::Testnet;
+const ADDRESS_PREFIX: Prefix = Prefix::Devnet;
 const ADDRESS_VERSION: Version = Version::PubKey;
 
 struct Stats {
@@ -214,7 +214,7 @@ async fn main() {
 
     let coinbase_maturity = match info.network.suffix {
         Some(11) => panic!("TN11 is not supported on this version"),
-        None | Some(_) => TESTNET_PARAMS.coinbase_maturity().upper_bound(),
+        None | Some(_) => DEVNET_PARAMS.coinbase_maturity().upper_bound(),
     };
     info!(
         "Node block-DAG info: \n\tNetwork: {}, \n\tBlock count: {}, \n\tHeader count: {}, \n\tDifficulty: {}, 
@@ -519,7 +519,11 @@ fn generate_tx(
     let outputs = (0..num_outs)
         .map(|_| TransactionOutput { value: send_amount / num_outs, script_public_key: script_public_key.clone() })
         .collect_vec();
-    let unsigned_tx = Transaction::new_non_finalized(TX_VERSION, inputs, outputs, 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
+    let mut payload = vec![];
+    if rand::thread_rng().gen_bool(0.01) {
+        payload = vec![17; 1500];
+    }
+    let unsigned_tx = Transaction::new_non_finalized(TX_VERSION, inputs, outputs, 0, SUBNETWORK_ID_NATIVE, 0, payload);
     let signed_tx =
         sign(MutableTransaction::with_entries(unsigned_tx, utxos.iter().map(|(_, entry)| entry.clone()).collect_vec()), schnorr_key);
     signed_tx.tx
