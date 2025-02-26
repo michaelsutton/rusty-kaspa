@@ -680,8 +680,8 @@ pub const SIMNET_PARAMS: Params = Params {
 };
 
 pub const CRESCENDO_FAST_DEVNET: CrescendoParams = CrescendoParams {
-    past_median_time_sampled_window_size: MEDIAN_TIME_SAMPLED_WINDOW_SIZE,
-    sampled_difficulty_window_size: DIFFICULTY_SAMPLED_WINDOW_SIZE,
+    past_median_time_sampled_window_size: MEDIAN_TIME_SAMPLED_WINDOW_SIZE / 5,
+    sampled_difficulty_window_size: DIFFICULTY_SAMPLED_WINDOW_SIZE / 10,
 
     //
     // ~~~~~~~~~~~~~~~~~~ BPS dependent constants ~~~~~~~~~~~~~~~~~~
@@ -717,7 +717,7 @@ pub const DEVNET_PARAMS: Params = Params {
     prior_target_time_per_block: 1000,
     max_difficulty_target: MAX_DIFFICULTY_TARGET,
     max_difficulty_target_f64: MAX_DIFFICULTY_TARGET_AS_F64,
-    prior_difficulty_window_size: LEGACY_DIFFICULTY_WINDOW_SIZE,
+    prior_difficulty_window_size: LEGACY_DIFFICULTY_WINDOW_SIZE / 10,
     min_difficulty_window_size: MIN_DIFFICULTY_WINDOW_SIZE / 10,
     prior_max_block_parents: 10,
     prior_mergeset_size_limit: 36,
@@ -749,7 +749,7 @@ pub const DEVNET_PARAMS: Params = Params {
     // Half a year in seconds = 365.25 / 2 * 24 * 60 * 60 = 15778800
     // The network was down for three days shortly after launch
     // Three days in seconds = 3 * 24 * 60 * 60 = 259200
-    deflationary_phase_daa_score: 15778800 - 259200,
+    deflationary_phase_daa_score: 1000,
     pre_deflationary_phase_base_subsidy: 50000000000,
     prior_coinbase_maturity: 100,
     skip_proof_of_work: false,
