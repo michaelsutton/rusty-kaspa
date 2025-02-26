@@ -191,12 +191,13 @@ fn main_impl(mut args: Args) {
     }
     args.bps = if args.testnet11 { TenBps::bps() as f64 } else { args.bps };
     let mut params = if args.testnet11 { SIMNET_PARAMS } else { DEVNET_PARAMS };
-    params.crescendo_activation = ForkActivation::always();
+    // params.crescendo_activation = ForkActivation::new(1200); // ForkActivation::always();
+    // params.min_difficulty_window_size = 20;
     params.crescendo.coinbase_maturity = 200;
     params.storage_mass_parameter = 10_000;
     let mut builder = ConfigBuilder::new(params)
-        .apply_args(|config| apply_args_to_consensus_params(&args, &mut config.params))
-        .apply_args(|config| apply_args_to_perf_params(&args, &mut config.perf))
+        // .apply_args(|config| apply_args_to_consensus_params(&args, &mut config.params))
+        // .apply_args(|config| apply_args_to_perf_params(&args, &mut config.perf))
         .adjust_perf_params_to_consensus_params()
         .apply_args(|config| config.ram_scale = args.ram_scale)
         .skip_proof_of_work()
@@ -285,7 +286,7 @@ fn main_impl(mut args: Args) {
     drop(consensus);
 }
 
-fn apply_args_to_consensus_params(args: &Args, params: &mut Params) {
+fn _apply_args_to_consensus_params(args: &Args, params: &mut Params) {
     // We have no actual PoW in the simulation, so the true max is most reflective,
     // however we avoid the actual max since it is reserved for the DB prefix scheme
     params.max_block_level = BlockLevel::MAX - 1;
@@ -336,7 +337,7 @@ fn apply_args_to_consensus_params(args: &Args, params: &mut Params) {
     }
 }
 
-fn apply_args_to_perf_params(args: &Args, perf_params: &mut PerfParams) {
+fn _apply_args_to_perf_params(args: &Args, perf_params: &mut PerfParams) {
     if let Some(processors_pool_threads) = args.processors_threads {
         perf_params.block_processors_num_threads = processors_pool_threads;
     }
