@@ -195,6 +195,22 @@ fn main_impl(mut args: Args) {
     // params.min_difficulty_window_size = 20;
     params.crescendo.coinbase_maturity = 200;
     params.storage_mass_parameter = 10_000;
+
+    params.pruning_proof_m = 16;
+    params.prior_difficulty_window_size = 64;
+    params.timestamp_deviation_tolerance = 16;
+    params.crescendo.sampled_difficulty_window_size = params.crescendo.sampled_difficulty_window_size.min(32);
+    params.prior_finality_depth = 128;
+    params.prior_merge_depth = 128;
+    params.prior_mergeset_size_limit = 32;
+    params.prior_pruning_depth = params.anticone_finalization_depth().before();
+
+    params.crescendo.finality_depth = 128 * 2;
+    params.crescendo.merge_depth = 128 * 2;
+    params.crescendo.mergeset_size_limit = 32 * 2;
+    params.crescendo.pruning_depth = params.anticone_finalization_depth().after();
+    info!("Setting pruning depth to {:?}", params.pruning_depth());
+
     let mut builder = ConfigBuilder::new(params)
         // .apply_args(|config| apply_args_to_consensus_params(&args, &mut config.params))
         // .apply_args(|config| apply_args_to_perf_params(&args, &mut config.perf))
