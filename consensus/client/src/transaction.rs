@@ -295,7 +295,7 @@ impl TryCastFromJs for Transaction {
                     let gas = object.get_u64("gas")?;
                     let payload = object.get_vec_u8("payload")?;
                     // mass field is optional
-                    let mass = object.get_u64("mass").unwrap_or_default();
+                    let mass = object.get_u64("mass").unwrap_or(u64::MAX);
                     let subnetwork_id = object.get_vec_u8("subnetworkId")?;
                     if subnetwork_id.len() != subnets::SUBNETWORK_ID_SIZE {
                         return Err(Error::Custom("subnetworkId must be 20 bytes long".into()));

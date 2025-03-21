@@ -332,6 +332,20 @@ impl RpcApi for RpcCoreService {
             }
         }
 
+        // [Crescendo]: warn non updated miners to upgrade their rpc flow before Crescendo activation
+        if !self.config.crescendo_activation.is_active(block.header.daa_score) {
+            // It is sufficient to witness a single transaction with non default mass to conclude that miner rpc flow is correct
+            if block.transactions.last().is_some_and(|tx| tx.mass() == u64::MAX) {
+                warn!(
+                    "The RPC submitted block {} contains transactions with unset mass value.
+This indicates that the RPC conversion flow used by the miner does not preserve the mass values received from GetBlockTemplate.
+You must upgrade your miner flow to propagate the mass field correctly prior to the Crescendo hardfork activation.
+Failure to do so will result in your blocks being considered invalid when Crescendo activates.",
+                    hash
+                );
+            }
+        }
+
         trace!("incoming SubmitBlockRequest for block {}", hash);
         match self.flow_context.submit_rpc_block(&session, block.clone()).await {
             Ok(_) => Ok(SubmitBlockResponse { report: SubmitBlockReport::Success }),
