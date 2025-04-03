@@ -63,7 +63,7 @@ message RpcTransaction {
   uint64 gas = 6;
   string payload = 8;
   RpcTransactionVerboseData verboseData = 9;
-  // adding optional temporarily so that we can warn non-updated clients (distinguish between unset and 0 which is a legal value)
+  // Adding optional temporarily so that we can warn non-updated clients (distinguish between unset and 0 which is a legal value)
   optional uint64 mass = 10;
 }
 
