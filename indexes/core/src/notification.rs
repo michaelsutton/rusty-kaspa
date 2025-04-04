@@ -69,12 +69,14 @@ pub struct UtxosChangedNotification {
 
 impl From<UtxoChanges> for UtxosChangedNotification {
     fn from(item: UtxoChanges) -> Self {
+        // TODO: propagate item.modified up the rpc notification stack
         Self { added: Arc::new(item.added), removed: Arc::new(item.removed) }
     }
 }
 
 impl UtxosChangedNotification {
     pub fn from_utxos_changed(utxos_changed: UtxoChanges) -> Self {
+        // TODO: propagate utxos_changed.modified up the rpc notification stack
         Self { added: Arc::new(utxos_changed.added), removed: Arc::new(utxos_changed.removed) }
     }
 

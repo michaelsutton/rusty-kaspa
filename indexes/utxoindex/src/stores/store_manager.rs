@@ -51,10 +51,10 @@ impl Store {
         &mut self,
         to_add: &UtxoSetByScriptPublicKey,
         to_remove: &UtxoSetByScriptPublicKey,
+        to_modify: &UtxoSetByScriptPublicKey,
         try_reset_on_err: bool,
     ) -> StoreResult<()> {
-        // A UTXO entry can appear both in removed and in added (if the DAA score of the entry changed). Thus
-        // we must first apply removals and then additions (so it will be re-added in the addition phase)
+        // First apply removals
         let mut res = self.utxos_by_script_public_key_store.remove_utxo_entries(to_remove);
 
         if res.is_err() {
@@ -66,6 +66,16 @@ impl Store {
 
         // Now apply additions
         res = self.utxos_by_script_public_key_store.add_utxo_entries(to_add);
+
+        if res.is_err() {
+            if try_reset_on_err {
+                self.delete_all()?;
+            }
+            return res;
+        }
+
+        // Finally, apply modifications
+        res = self.utxos_by_script_public_key_store.add_utxo_entries(to_modify);
 
         if try_reset_on_err && res.is_err() {
             self.delete_all()?;

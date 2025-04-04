@@ -92,7 +92,12 @@ impl UtxoIndexApi for UtxoIndex {
         utxoindex_changes.set_tips(tips.unwrap_or_clone().to_vec());
 
         // Commit changed utxo state to db
-        self.store.update_utxo_state(&utxoindex_changes.utxo_changes.added, &utxoindex_changes.utxo_changes.removed, false)?;
+        self.store.update_utxo_state(
+            &utxoindex_changes.utxo_changes.added,
+            &utxoindex_changes.utxo_changes.removed,
+            &utxoindex_changes.utxo_changes.modified,
+            false,
+        )?;
 
         // Update the stored circulating supply with the accumulated delta of the changes
         let updated_circulating_supply = self.store.update_circulating_supply(utxoindex_changes.supply_change, false)?;
@@ -167,7 +172,12 @@ impl UtxoIndexApi for UtxoIndex {
 
             circulating_supply += utxoindex_changes.supply_change as CirculatingSupply;
 
-            self.store.update_utxo_state(&utxoindex_changes.utxo_changes.added, &utxoindex_changes.utxo_changes.removed, true)?;
+            self.store.update_utxo_state(
+                &utxoindex_changes.utxo_changes.added,
+                &utxoindex_changes.utxo_changes.removed,
+                &utxoindex_changes.utxo_changes.modified,
+                true,
+            )?;
 
             if current_chunk_size < RESYNC_CHUNK_SIZE {
                 break;

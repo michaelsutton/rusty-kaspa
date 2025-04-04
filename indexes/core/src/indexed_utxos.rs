@@ -44,11 +44,12 @@ impl From<UtxoEntry> for CompactUtxoEntry {
 pub struct UtxoChanges {
     pub added: UtxoSetByScriptPublicKey,
     pub removed: UtxoSetByScriptPublicKey,
+    pub modified: UtxoSetByScriptPublicKey,
 }
 
 impl UtxoChanges {
     /// Create a new [`UtxoChanges`] struct via supplied `added` and `removed` [`UtxoSetByScriptPublicKey`]'s
-    pub fn new(added: UtxoSetByScriptPublicKey, removed: UtxoSetByScriptPublicKey) -> Self {
-        Self { added, removed }
+    pub fn new(added: UtxoSetByScriptPublicKey, removed: UtxoSetByScriptPublicKey, modified: UtxoSetByScriptPublicKey) -> Self {
+        Self { added, removed, modified }
     }
 }
