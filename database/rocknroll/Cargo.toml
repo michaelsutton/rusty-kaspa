@@ -7,28 +7,29 @@ authors.workspace = true
 include.workspace = true
 license.workspace = true
 
+[[bin]]
+name="rocknroll"
+path="src/finality-monitor.rs"
+
 [dependencies]
 kaspa-core.workspace = true
 kaspa-consensus.workspace = true
 kaspa-consensus-core.workspace = true
 kaspa-database.workspace = true
-kaspa-grpc-client.workspace = true
 kaspa-rpc-core.workspace = true
-kaspa-addresses.workspace = true
-kaspa-txscript.workspace = true
 kaspa-utils.workspace = true
 kaspad.workspace = true
 
-async-channel.workspace = true
-parking_lot.workspace = true
 chrono.workspace = true
 clap.workspace = true
-faster-hex.workspace = true
-itertools.workspace = true
 log.workspace = true
+rand.workspace = true
 rayon.workspace = true
-secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
 tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread"] }
+workflow-terminal.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+workflow-core.workspace = true
 
 # [dev-dependencies]
 # criterion.workspace = true

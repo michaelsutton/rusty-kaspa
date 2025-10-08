@@ -153,9 +153,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.97"
+version = "1.0.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcfed56ad506cb2c684a14971b8861fdc3baaaae314b9e5f9bb532cbe3ba7a4f"
+checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
 name = "arc-swap"
@@ -4982,26 +4982,23 @@ dependencies = [
 name = "rocknroll"
 version = "1.0.1"
 dependencies = [
- "async-channel 2.3.1",
+ "async-trait",
  "chrono",
  "clap 4.5.19",
- "faster-hex",
- "itertools 0.13.0",
- "kaspa-addresses",
+ "futures",
  "kaspa-consensus",
  "kaspa-consensus-core",
  "kaspa-core",
  "kaspa-database",
- "kaspa-grpc-client",
  "kaspa-rpc-core",
- "kaspa-txscript",
  "kaspa-utils",
  "kaspad",
  "log",
- "parking_lot",
+ "rand",
  "rayon",
- "secp256k1",
  "tokio",
+ "workflow-core",
+ "workflow-terminal",
 ]
 
 [[package]]

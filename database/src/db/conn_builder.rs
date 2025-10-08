@@ -1,6 +1,9 @@
 use crate::db::DB;
 use rocksdb::{DBWithThreadMode, MultiThreaded};
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 #[derive(Debug)]
 pub struct Unspecified;
@@ -122,6 +125,20 @@ impl ConnBuilder<PathBuf, false, Unspecified, i32> {
         let (opts, guard) = default_opts!(self)?;
         let db = Arc::new(DB::new(
             <DBWithThreadMode<MultiThreaded>>::open_for_read_only(&opts, self.db_path.to_str().unwrap(), false).unwrap(),
+            guard,
+        ));
+        Ok(db)
+    }
+
+    pub fn build_secondary<S: AsRef<Path>>(self, secondary_path: S) -> Result<Arc<DB>, kaspa_utils::fd_budget::Error> {
+        let (opts, guard) = default_opts!(self)?;
+        let db = Arc::new(DB::new(
+            <DBWithThreadMode<MultiThreaded>>::open_as_secondary(
+                &opts,
+                self.db_path.to_str().unwrap(),
+                secondary_path.as_ref().to_str().unwrap(),
+            )
+            .unwrap(),
             guard,
         ));
         Ok(db)
