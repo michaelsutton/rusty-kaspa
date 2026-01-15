@@ -443,3 +443,357 @@ impl PruningProofManager {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ConfigBuilder;
+    use crate::consensus::test_consensus::TestConsensus;
+    use crate::processes::reachability::tests::r#gen::generate_complex_dag;
+    use kaspa_consensus_core::config::params::SIMNET_PARAMS;
+    use kaspa_consensus_core::errors::pruning::PruningImportError;
+    use kaspa_pow::calc_block_level;
+
+    fn init_consensus(skip_pow: bool) -> (TestConsensus, crate::config::Config) {
+        // init_allocator_with_default_settings();
+        let mut builder = ConfigBuilder::new(SIMNET_PARAMS).edit_consensus_params(|p| p.max_block_level = BlockLevel::MAX - 1);
+        if skip_pow {
+            builder = builder.skip_proof_of_work();
+        }
+        let cfg = builder.build();
+        let consensus = TestConsensus::new(&cfg);
+        (consensus, cfg)
+    }
+
+    async fn build_dag_into_consensus(consensus: &TestConsensus, genesis: Hash, target_blocks: u64) -> Vec<Hash> {
+        // generate_complex_dag returns (something, Vec<(id, parents)>)
+        // We map id==0 => actual consensus genesis hash.
+        let (genesis_id, nodes) = generate_complex_dag(/*delay=*/ 1.0, /*bps=*/ 15.0, target_blocks);
+
+        let mut inserted = Vec::with_capacity(nodes.len().saturating_sub(1));
+        for (id, parents) in nodes {
+            if id == genesis_id {
+                continue; // genesis already exists in consensus
+            }
+            let h = id.into();
+            let p = parents.into_iter().map(|pid| if pid == genesis_id { genesis } else { pid.into() }).collect::<Vec<_>>();
+
+            // header-only blocks are enough for pruning proof logic
+            consensus.add_header_only_block_with_parents(h, p).await.unwrap();
+            inserted.push(h);
+        }
+        inserted
+    }
+
+    /// Helper: run from_proof and assert a specific pruning error variant.
+    fn assert_from_proof_err<F>(ppm: &PruningProofManager, proof: PruningPointProof, check: F)
+    where
+        F: FnOnce(PruningImportError),
+    {
+        match ProofContext::from_proof(ppm, &proof, /*log_validating=*/ false) {
+            Err(e) => check(e),
+            Ok(ControlFlow::Break(())) => panic!("expected Err(..) but got ControlFlow::Break"),
+            Ok(ControlFlow::Continue(_)) => panic!("expected Err(..) but got Ok(Continue)"),
+        }
+    }
+
+    #[tokio::test]
+    async fn proof_context_from_proof_all_error_invariants() {
+        //
+        // 1) Main consensus with skip_pow=true (easier to build lots of blocks)
+        //
+        let (consensus, cfg) = init_consensus(/*skip_pow=*/ true);
+        let wait_handles = consensus.init();
+
+        let genesis = cfg.genesis.hash;
+
+        // Build a fairly large DAG so we get some natural low-level sampling.
+        // Increase if your pruning_proof_m is very large.
+        let inserted_hashes = build_dag_into_consensus(&consensus, genesis, /*target_blocks=*/ 8000).await;
+
+        // Grab pruning proof manager
+        // (Assumes consensus has services.pruning_proof_manager like other managers used in TestConsensus.)
+        let ppm = &consensus.consensus_clone().services.pruning_proof_manager;
+
+        let m = ppm.pruning_proof_m;
+        let max_level = ppm.max_block_level;
+
+        // Pick pruning points:
+        // - pp_low: non-genesis with blue_score < 2m (to trigger SelectedTipNotEnoughBlueScore)
+        // - pp_good: non-genesis, low level (< max) and blue_score >= 2m+5 (to produce a valid proof)
+        let mut pp_low: Option<Hash> = None;
+        let mut pp_good: Option<Hash> = None;
+
+        for &h in &inserted_hashes {
+            let hdr = ppm.headers_store.get_header(h).unwrap();
+            let lvl = calc_block_level(&hdr, max_level);
+            let bs = hdr.blue_score;
+
+            // We want a pruning point that is NOT genesis and has a lower block level than max,
+            // so that we have levels > pp_level and can hit the "NotParentOfPruningPoint" invariant.
+            if h != genesis && lvl < max_level {
+                if pp_low.is_none() && bs > 0 && bs < 2 * m {
+                    pp_low = Some(h);
+                }
+                if pp_good.is_none() && bs >= 2 * m + 5 {
+                    pp_good = Some(h);
+                }
+            }
+
+            if pp_low.is_some() && pp_good.is_some() {
+                break;
+            }
+        }
+
+        let pp_good = pp_good.unwrap_or_else(|| {
+            // Fallback: pick the last inserted block (usually highest blue score)
+            *inserted_hashes.last().expect("need at least one non-genesis block")
+        });
+
+        let pp_low = pp_low.unwrap_or_else(|| {
+            // Fallback: pick the earliest inserted non-genesis block (usually low blue score)
+            *inserted_hashes.first().expect("need at least one non-genesis block")
+        });
+
+        //
+        // Build a VALID proof (baseline)
+        //
+        let proof_good = ppm.build_pruning_point_proof(pp_good);
+        let base = ProofContext::from_proof(ppm, &proof_good, false)
+            .expect("baseline should not error")
+            .continue_value()
+            .expect("baseline should not break");
+
+        //
+        // Now: mutate proof_good to hit every error invariant (except PoW fail handled separately below)
+        //
+
+        // A) ProofNotEnoughLevels
+        {
+            let mut p = proof_good.clone();
+            p.pop();
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::ProofNotEnoughLevels(expected) => {
+                    assert_eq!(expected, max_level as usize + 1);
+                }
+                other => panic!("expected ProofNotEnoughLevels, got {other:?}"),
+            });
+        }
+
+        // B) PruningProofNotEnoughHeaders (proof[0] empty)
+        {
+            let mut p = proof_good.clone();
+            p[0].clear();
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofNotEnoughHeaders => {}
+                other => panic!("expected PruningProofNotEnoughHeaders, got {other:?}"),
+            });
+        }
+
+        // C) PruningProofWrongBlockLevel: place a level-0 header into a higher level bucket
+        {
+            // Find a header in the baseline proof with computed level == 0
+            let mut low_lvl_hdr: Option<Arc<Header>> = None;
+            for h in proof_good.iter().flatten() {
+                let lvl = calc_block_level(h, max_level);
+                if lvl == 0 {
+                    low_lvl_hdr = Some(h.clone());
+                    break;
+                }
+            }
+            let low_lvl_hdr = low_lvl_hdr.expect("need at least one naturally sampled level-0 header; increase blocks or max level");
+
+            let bad_level: BlockLevel = 1;
+            let mut p = proof_good.clone();
+            assert!(!p[bad_level as usize].is_empty());
+            p[bad_level as usize][0] = low_lvl_hdr;
+
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofWrongBlockLevel(_, header_level, level_expected) => {
+                    assert!(header_level < level_expected);
+                    assert_eq!(level_expected, bad_level);
+                }
+                other => panic!("expected PruningProofWrongBlockLevel, got {other:?}"),
+            });
+        }
+
+        // D) PruningProofHeaderWithNoKnownParents: for i!=0, make all parents unknown so filtered parents = empty
+        {
+            let level: BlockLevel = 0;
+            let mut p = proof_good.clone();
+            if p[level as usize].len() < 2 {
+                panic!("need at least 2 headers at some level to trigger HeaderWithNoKnownParents; try increasing blocks");
+            }
+
+            let mut hdr = (*p[level as usize][1]).clone();
+            // Put only unknown parents at every level so parents_at_level(..., level) returns unknown and gets filtered out.
+            hdr.parents_by_level = (0..=max_level).map(|_| vec![999_999_999u64.into()]).collect_vec().try_into().unwrap();
+            p[level as usize][1] = Arc::new(hdr);
+
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofHeaderWithNoKnownParents(_, lvl) => assert_eq!(lvl, level),
+                other => panic!("expected PruningProofHeaderWithNoKnownParents, got {other:?}"),
+            });
+        }
+
+        // E) PruningProofInconsistentBlueWork: set header.blue_work <= parent.blue_work
+        {
+            // Find a level with at least 2 headers and where the 2nd has at least one known parent
+            let mut chosen: Option<(BlockLevel, usize)> = None;
+            'outer: for lvl in 0..=max_level {
+                let v = &proof_good[lvl as usize];
+                if v.len() < 2 {
+                    continue;
+                }
+                // We rely on existing parents; just pick index 1 and hope it has some known parent in proof.
+                chosen = Some((lvl, 1));
+                break 'outer;
+            }
+            let (lvl, idx) = chosen.expect("could not find a suitable level for inconsistent blue work");
+
+            let mut p = proof_good.clone();
+            let mut hdr = (*p[lvl as usize][idx]).clone();
+            hdr.blue_work = 0.into(); // almost certainly <= any parent blue_work
+            p[lvl as usize][idx] = Arc::new(hdr);
+
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofInconsistentBlueWork(_, level) => assert_eq!(level, lvl),
+                other => panic!("expected PruningProofInconsistentBlueWork, got {other:?}"),
+            });
+        }
+
+        // F) PruningProofDuplicateHeaderAtLevel: duplicate the first header within a level vector
+        {
+            let lvl: BlockLevel = 0;
+            let mut p = proof_good.clone();
+            let h1 = p[lvl as usize][1].clone();
+            p[lvl as usize].insert(2, h1);
+
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofDuplicateHeaderAtLevel(_, level) => assert_eq!(level, lvl),
+                other => panic!("expected PruningProofDuplicateHeaderAtLevel, got {other:?}"),
+            });
+        }
+
+        // G) PruningProofMissingBlockAtDepthMFromNextLevel:
+        // remove the "block at depth M" (computed from baseline ctx) from the lower level proof
+        {
+            // pick a level that is < max_level
+            let lvl: BlockLevel = (max_level - 1).min(1);
+            let next = lvl + 1;
+
+            let target = base.ghostdag_stores[next as usize].block_at_depth(base.selected_tip_by_level[next as usize], m).unwrap();
+
+            let mut p = proof_good.clone();
+            let before = p[lvl as usize].len();
+            p[lvl as usize].retain(|h| h.hash != target);
+
+            // Ensure we actually removed something and didn't empty the level
+            if p[lvl as usize].len() == before || p[lvl as usize].is_empty() {
+                panic!("failed to remove depth-M target from level {lvl}; try another level or increase blocks");
+            }
+
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofMissingBlockAtDepthMFromNextLevel(l0, l1) => {
+                    assert_eq!(l0, lvl);
+                    assert_eq!(l1, next);
+                }
+                other => panic!("expected PruningProofMissingBlockAtDepthMFromNextLevel, got {other:?}"),
+            });
+        }
+
+        // H) PruningProofSelectedTipIsNotThePruningPoint:
+        // Change proof[0].last() (the PP header) so level-0 selected tip won't match it.
+        {
+            let mut p = proof_good.clone();
+            if p[1].len() < 2 {
+                panic!("need at least 2 headers at level 0 to swap pruning point header");
+            }
+            let len = p[1].len();
+            p[1].swap(len - 2, len - 1);
+
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofSelectedTipIsNotThePruningPoint(_, lvl) => assert_eq!(lvl, 1),
+                other => panic!("expected PruningProofSelectedTipIsNotThePruningPoint, got {other:?}"),
+            });
+        }
+
+        // I) PruningProofSelectedTipNotParentOfPruningPoint:
+        // At some level > pp_level, force selected tip to be a non-parent by adding a "better" competing header.
+        {
+            // We want a high level where this invariant is checked as "level > pp_level".
+            // Use max_level (or any high level).
+            let lvl: BlockLevel = max_level;
+
+            let mut p = proof_good.clone();
+
+            // Take an existing header at this level and clone it into a new "competing tip" with a new hash and huge blue_work.
+            let base_hdr = (*p[lvl as usize][0]).clone();
+            let mut new_hdr = base_hdr.clone();
+            new_hdr.hash = 8_888_888_888u64.into();
+            new_hdr.blue_work = base_hdr.blue_work.saturating_add(1_000_000_000.into());
+            new_hdr.blue_score = base_hdr.blue_score.saturating_add(1_000_000_000);
+
+            p[lvl as usize].push(Arc::new(new_hdr));
+
+            assert_from_proof_err(ppm, p, |e| match e {
+                PruningImportError::PruningProofSelectedTipNotParentOfPruningPoint(_, level) => assert_eq!(level, lvl),
+                other => panic!("expected PruningProofSelectedTipNotParentOfPruningPoint, got {other:?}"),
+            });
+        }
+
+        // J) PruningProofSelectedTipNotEnoughBlueScore:
+        // Build a proof around a pruning point with blue_score < 2m (non-genesis).
+        {
+            let proof_low = ppm.build_pruning_point_proof(pp_low);
+            assert_from_proof_err(ppm, proof_low, |e| match e {
+                PruningImportError::PruningProofSelectedTipNotEnoughBlueScore(_, _, tip_bs) => {
+                    assert!(tip_bs < 2 * m, "expected tip blue score < 2m, got {tip_bs}, m={m}");
+                }
+                other => panic!("expected PruningProofSelectedTipNotEnoughBlueScore, got {other:?}"),
+            });
+        }
+
+        //
+        // 2) Separate consensus with skip_pow=false just to hit ProofOfWorkFailed deterministically
+        //
+        {
+            let (consensus_pow, cfg_pow) = init_consensus(/*skip_pow=*/ false);
+            let wait_handles_pow = consensus_pow.init();
+
+            let ppm_pow = &consensus_pow.consensus_clone().services.pruning_proof_manager;
+            let max_level_pow = ppm_pow.max_block_level;
+            let genesis_pow = cfg_pow.genesis.hash;
+            let genesis_header = ppm_pow.headers_store.get_header(genesis_pow).unwrap();
+
+            // Craft a pruning point header that:
+            // - has genesis as parent at EVERY level (so higher-level selected tip can be genesis and still be "a parent of pp")
+            // - lives at level 0 bucket, so WrongBlockLevel doesn't trigger before PoW check
+            // - has bits=0 => essentially impossible target, so PoW fails (nonce 0 should fail)
+            let mut bad = (*genesis_header).clone();
+            bad.hash = 7_777_777_777u64.into();
+            bad.bits = 0;
+            bad.parents_by_level = (0..=max_level_pow).map(|_| vec![genesis_pow]).collect_vec().try_into().unwrap();
+
+            let bad = Arc::new(bad);
+
+            // Build a "minimal but well-shaped" proof:
+            // - for every level>0: use genesis header so selected tip is genesis
+            // - for level 0: include the bad header as the pruning point header
+            let mut proof = (0..=max_level_pow).map(|_| vec![genesis_header.clone()]).collect_vec();
+            proof[0] = vec![bad.clone()];
+
+            assert_from_proof_err(ppm_pow, proof, |e| match e {
+                PruningImportError::ProofOfWorkFailed(h, lvl) => {
+                    assert_eq!(h, bad.hash);
+                    assert_eq!(lvl, 0);
+                }
+                other => panic!("expected ProofOfWorkFailed, got {other:?}"),
+            });
+
+            consensus_pow.shutdown(wait_handles_pow);
+        }
+
+        consensus.shutdown(wait_handles);
+    }
+}
