@@ -9,6 +9,7 @@ use blake2b_simd::Params;
 use kaspa_consensus_core::hashing::sighash::SigHashReusedValues;
 use kaspa_consensus_core::hashing::sighash_type::SigHashType;
 use kaspa_consensus_core::tx::VerifiableTransaction;
+use kaspa_hashes::Hash;
 use sha2::{Digest, Sha256};
 use std::{
     fmt::{Debug, Formatter},
@@ -1414,7 +1415,22 @@ opcode_list! {
     opcode OpUnknown209<0xd1, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
     opcode OpUnknown210<0xd2, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
     opcode OpUnknown211<0xd3, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
-    opcode OpUnknown212<0xd4, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
+    opcode OpChainblockSeqCommit<0xd4, 1>(self, vm) {
+        let Some(seq_commit_accessor) = vm.ctx.seq_commit_accessor else {
+            // seq_commit_access is none if only opcode is not enabled
+            return Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
+        };
+        let [block]: [Hash; 1] = vm.dstack.pop_items()?; // todo we actually could convert slice ref into hash ref if it was repr(transparent)
+        match seq_commit_accessor.is_chain_ancestor_from_pov(block) {
+            None => return Err(TxScriptError::BlockAlreadyPruned(block.to_string())),
+            Some(false) => return Err(TxScriptError::BlockNotSelected(block.to_string())),
+            Some(true) => {}
+        };
+        let commitment = seq_commit_accessor.seq_commitment_within_depth(block)
+            .ok_or_else(|| TxScriptError::BlockIsTooDeep(block.to_string()))?;
+        vm.dstack.push_item(commitment)?;
+        Ok(())
+    }
     opcode OpUnknown213<0xd5, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
     opcode OpUnknown214<0xd6, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
     opcode OpUnknown215<0xd7, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
@@ -1618,7 +1634,7 @@ mod test {
             opcodes::OpUnknown209::empty().expect("Should accept empty"),
             opcodes::OpUnknown210::empty().expect("Should accept empty"),
             opcodes::OpUnknown211::empty().expect("Should accept empty"),
-            opcodes::OpUnknown212::empty().expect("Should accept empty"),
+            opcodes::OpChainblockSeqCommit::empty().expect("Should accept empty"),
             opcodes::OpUnknown213::empty().expect("Should accept empty"),
             opcodes::OpUnknown214::empty().expect("Should accept empty"),
             opcodes::OpUnknown215::empty().expect("Should accept empty"),

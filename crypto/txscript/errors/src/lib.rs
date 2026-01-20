@@ -84,6 +84,14 @@ pub enum TxScriptError {
 
     #[error("{0} is not a valid covenant output index for input {1} with {2} covenant outputs")]
     InvalidCovOutIndex(usize, usize, usize),
+    #[error("blockhash must be exactly 32 bytes long, got {0} bytes instead")]
+    InvalidLengthOfBlockHash(usize),
+    #[error("block {0} not selected")]
+    BlockNotSelected(String),
+    #[error("block {0} already pruned")]
+    BlockAlreadyPruned(String),
+    #[error("block {0} is too deep")]
+    BlockIsTooDeep(String),
 }
 
 #[derive(Error, PartialEq, Eq, Debug, Clone, Copy)]
