@@ -1,4 +1,4 @@
-use kaspa_consensus_core::tx::VerifiableTransaction;
+use kaspa_consensus_core::tx::{CovenantBinding, VerifiableTransaction};
 use kaspa_hashes::Hash;
 use kaspa_txscript_errors::{CovenantsError, TxScriptError};
 use std::{collections::HashMap, sync::LazyLock};
@@ -74,30 +74,40 @@ impl CovenantsContext {
         }
 
         for (i, output) in tx.outputs().iter().enumerate() {
-            if let Some(binding) = &output.covenant {
-                let auth_input = binding.authorizing_input as usize;
-                let Some(utxo_entry) = tx.utxo(auth_input) else {
-                    return Err(CovenantsError::AuthInputOutOfBounds(i, binding.authorizing_input));
-                };
-                if let Some(covenant_id) = utxo_entry.covenant_id {
-                    if covenant_id != binding.covenant_id {
-                        return Err(CovenantsError::WrongCovenantId(i));
-                    }
+            let Some(CovenantBinding { covenant_id, authorizing_input }) = output.covenant else {
+                continue;
+            };
 
-                    // Add output to ctxs only in the non genesis case
+            let auth_input_idx = authorizing_input as usize;
+
+            let Some(utxo_entry) = tx.utxo(auth_input_idx) else {
+                return Err(CovenantsError::AuthInputOutOfBounds(i, authorizing_input));
+            };
+
+            match utxo_entry.covenant_id {
+                Some(input_covenant_id) if input_covenant_id == covenant_id => {
+                    // Non-genesis case: the authorizing input is already under a covenant.
+                    // Add the output to the input- and covenant-level contexts.
+
                     ctx.input_ctxs
-                        .entry(auth_input)
-                        .or_insert_with(|| CovenantInputContext::new(binding.covenant_id))
+                        .entry(auth_input_idx)
+                        .or_insert_with(|| CovenantInputContext::new(covenant_id))
                         .auth_outputs
                         .push(i);
 
-                    ctx.shared_ctxs.entry(binding.covenant_id).or_default().output_indices.push(i);
-                } else {
-                    // Check the possibility for covenant genesis case
-                    let authorizing_input = &tx.inputs()[auth_input]; // Guaranteed to exist from the earlier check on the UTXO entry.
-                    if kaspa_consensus_core::hashing::covenant_id::covenant_id(authorizing_input.previous_outpoint)
-                        != binding.covenant_id
-                    {
+                    ctx.shared_ctxs.entry(covenant_id).or_default().output_indices.push(i);
+                }
+                Some(_) => {
+                    return Err(CovenantsError::WrongCovenantId(i));
+                }
+                None => {
+                    // Genesis case: the authorizing input is not under a covenant yet.
+                    // No covenant script is expected to run at this point, so we only validate.
+
+                    let input = &tx.inputs()[auth_input_idx]; // safe: utxo(auth_input) existed above
+                    let expected_id = kaspa_consensus_core::hashing::covenant_id::covenant_id(input.previous_outpoint);
+
+                    if expected_id != covenant_id {
                         return Err(CovenantsError::WrongGenesisCovenantId(i));
                     }
                 }
