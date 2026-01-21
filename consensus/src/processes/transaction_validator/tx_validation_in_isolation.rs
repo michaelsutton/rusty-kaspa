@@ -175,15 +175,15 @@ fn check_tx_version_specific_fields(tx: &Transaction) -> TxResult<()> {
 #[cfg(test)]
 mod tests {
     use kaspa_consensus_core::{
+        constants::{TX_VERSION, TX_VERSION_POST_COV_HF},
         subnets::{SubnetworkId, SUBNETWORK_ID_COINBASE, SUBNETWORK_ID_NATIVE},
         tx::{scriptvec, ScriptPublicKey, Transaction, TransactionId, TransactionInput, TransactionOutpoint, TransactionOutput},
     };
     use kaspa_core::assert_match;
 
     use crate::{
-        constants::TX_VERSION,
         params::MAINNET_PARAMS,
-        processes::transaction_validator::{errors::TxRuleError, TransactionValidator},
+        processes::transaction_validator::{errors::TxRuleError, tx_validation_in_header_context::LockTimeArg, TransactionValidator},
     };
 
     #[test]
@@ -326,8 +326,14 @@ mod tests {
         tx.payload = vec![0];
         assert_match!(tv.validate_tx_in_isolation(&tx), Ok(()));
 
+        let mut tx = valid_tx.clone();
+        tx.version = TX_VERSION_POST_COV_HF + 1;
+        assert_match!(tv.validate_tx_in_isolation(&tx), Err(TxRuleError::UnknownTxVersion(_)));
+
+        // Test prev version upper bound in header context
+        // TODO (covpp): turn back into pure in-isolation test
         let mut tx = valid_tx;
         tx.version = TX_VERSION + 1;
-        assert_match!(tv.validate_tx_in_isolation(&tx), Err(TxRuleError::UnknownTxVersion(_)));
+        assert_match!(tv.validate_tx_in_header_context(&tx, LockTimeArg::Finalized, 0), Err(TxRuleError::UnknownTxVersion(_)));
     }
 }
