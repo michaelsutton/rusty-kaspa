@@ -185,7 +185,7 @@ mod tests {
         let (input, entry) = tx.populated_inputs().next().unwrap();
 
         let cache = Cache::new(10_000);
-        let ctx = EngineContext::new(&reused_values, &cache);
+        let ctx = EngineContext::new(&cache).with_reused(&reused_values);
         let mut engine = TxScriptEngine::from_transaction_input(&tx, input, 0, entry, ctx, Default::default());
         assert_eq!(engine.execute().is_ok(), is_ok);
     }

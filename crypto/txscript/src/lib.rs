@@ -44,7 +44,8 @@ pub mod seq_commit_accessor;
 
 pub mod engine_context;
 
-pub use engine_context::{EngineContext, MissingReusedValues};
+pub(crate) use engine_context::EngineContext;
+pub use engine_context::{EngineCtx, EngineCtxSync, EngineCtxUnsync};
 
 pub const MAX_SCRIPT_PUBLIC_KEY_VERSION: u16 = 0;
 pub const MAX_STACK_SIZE: usize = 244;
@@ -157,11 +158,14 @@ pub fn get_sig_op_count<T: VerifiableTransaction>(
     tx: &T,
     input_idx: usize,
     covenants_ctx: &CovenantsContext,
-    dag: Option<&dyn SeqCommitAccessor>,
+    seq_commit_accessor: Option<&dyn SeqCommitAccessor>,
 ) -> Result<u8, TxScriptError> {
     let sig_cache = Cache::new(0);
     let reused_values = SigHashReusedValuesUnsync::new();
-    let ctx = EngineContext::new(&reused_values, &sig_cache).with_covenants_ctx(covenants_ctx).with_seq_commit_accessor_opt(dag);
+    let ctx = EngineCtx::new(&sig_cache)
+        .with_reused(&reused_values)
+        .with_covenants_ctx(covenants_ctx)
+        .with_seq_commit_accessor_opt(seq_commit_accessor);
     let mut vm = TxScriptEngine::from_transaction_input(
         tx,
         &tx.inputs()[input_idx],
@@ -324,7 +328,7 @@ impl<'a, T: VerifiableTransaction, Reused: SigHashReusedValues> TxScriptEngine<'
             dstack: Self::new_stack(flags),
             astack: Self::new_stack(flags),
             script_source: ScriptSource::StandAloneScripts(vec![script]),
-            ctx: EngineContext::new(reused_values, sig_cache),
+            ctx: EngineCtx::new(sig_cache).with_reused(reused_values),
             cond_stack: Default::default(),
             num_ops: 0,
             // Runtime sig op counting is not needed for standalone scripts, only inputs have sig op count value
@@ -731,7 +735,7 @@ mod tests {
                 &input,
                 0,
                 &utxo_entry,
-                EngineContext::new(&reused_values, &sig_cache),
+                EngineCtx::new(&sig_cache).with_reused(&reused_values),
                 Default::default(),
             );
             assert_eq!(vm.execute(), test.expected_result);
@@ -1297,7 +1301,7 @@ mod tests {
                 &tx.inputs()[0],
                 0,
                 &utxo_entry,
-                EngineContext::new(&reused_values, &sig_cache),
+                EngineCtx::new(&sig_cache).with_reused(&reused_values),
                 Default::default(),
             );
 
@@ -1475,7 +1479,8 @@ mod bitcoind_tests {
                 &populated_tx.tx().inputs[0],
                 0,
                 &populated_tx.entries[0],
-                EngineContext::new(&reused_values, &sig_cache)
+                EngineCtx::new(&sig_cache)
+                    .with_reused(&reused_values)
                     .with_seq_commit_accessor_opt(flags.covenants_enabled.then_some(&MockSeqCommitAccessor)),
                 flags,
             );

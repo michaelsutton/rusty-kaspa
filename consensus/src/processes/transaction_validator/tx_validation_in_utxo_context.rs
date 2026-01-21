@@ -5,7 +5,7 @@ use kaspa_consensus_core::{
 };
 use kaspa_txscript::{
     covenants::{CovenantGlobalContext, CovenantLocalContext, CovenantsContext},
-    get_sig_op_count_upper_bound, EngineContext, EngineFlags, MissingReusedValues, SeqCommitAccessor, TxScriptEngine,
+    get_sig_op_count_upper_bound, EngineCtx, EngineCtxSync, EngineCtxUnsync, EngineFlags, SeqCommitAccessor, TxScriptEngine,
 };
 use kaspa_txscript_errors::TxScriptError;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -178,9 +178,7 @@ impl TransactionValidator {
         block_daa_score: u64,
         seq_commit_accessor: Option<&dyn SeqCommitAccessor>,
     ) -> TxResult<()> {
-        let ctx = EngineContext::with_missing(&self.sig_cache)
-            .with_covenants_ctx(&covenants_ctx)
-            .with_seq_commit_accessor_opt(seq_commit_accessor);
+        let ctx = EngineCtx::new(&self.sig_cache).with_covenants_ctx(&covenants_ctx).with_seq_commit_accessor_opt(seq_commit_accessor);
         let flags = EngineFlags { covenants_enabled: self.covenants_activation.is_active(block_daa_score) };
         check_scripts(tx, ctx, flags)
     }
@@ -249,11 +247,7 @@ impl TransactionValidator {
     }
 }
 
-pub fn check_scripts(
-    tx: &(impl VerifiableTransaction + Sync),
-    ctx: EngineContext<'_, MissingReusedValues>,
-    flags: EngineFlags,
-) -> TxResult<()> {
+pub fn check_scripts(tx: &(impl VerifiableTransaction + Sync), ctx: EngineCtx<'_>, flags: EngineFlags) -> TxResult<()> {
     if tx.inputs().len() > CHECK_SCRIPTS_PARALLELISM_THRESHOLD {
         let reused_values = SigHashReusedValuesSync::new();
         check_scripts_par_iter(tx, ctx.with_reused(&reused_values), flags)
@@ -263,22 +257,14 @@ pub fn check_scripts(
     }
 }
 
-pub fn check_scripts_sequential(
-    tx: &impl VerifiableTransaction,
-    ctx: EngineContext<'_, SigHashReusedValuesUnsync>,
-    flags: EngineFlags,
-) -> TxResult<()> {
+pub fn check_scripts_sequential(tx: &impl VerifiableTransaction, ctx: EngineCtxUnsync<'_>, flags: EngineFlags) -> TxResult<()> {
     for (i, (input, entry)) in tx.populated_inputs().enumerate() {
         TxScriptEngine::from_transaction_input(tx, input, i, entry, ctx, flags).execute().map_err(|err| map_script_err(err, input))?;
     }
     Ok(())
 }
 
-pub fn check_scripts_par_iter(
-    tx: &(impl VerifiableTransaction + Sync),
-    ctx: EngineContext<'_, SigHashReusedValuesSync>,
-    flags: EngineFlags,
-) -> TxResult<()> {
+pub fn check_scripts_par_iter(tx: &(impl VerifiableTransaction + Sync), ctx: EngineCtxSync<'_>, flags: EngineFlags) -> TxResult<()> {
     (0..tx.inputs().len()).into_par_iter().try_for_each(|idx| {
         let (input, utxo) = tx.populated_input(idx);
         TxScriptEngine::from_transaction_input(tx, input, idx, utxo, ctx, flags).execute().map_err(|err| map_script_err(err, input))
@@ -287,7 +273,7 @@ pub fn check_scripts_par_iter(
 
 pub fn check_scripts_par_iter_pool(
     tx: &(impl VerifiableTransaction + Sync),
-    ctx: EngineContext<'_, SigHashReusedValuesSync>,
+    ctx: EngineCtxSync<'_>,
     flags: EngineFlags,
     pool: &ThreadPool,
 ) -> TxResult<()> {

@@ -17,7 +17,7 @@ use kaspa_txscript::{
     },
     pay_to_address_script, pay_to_script_hash_script,
     script_builder::{ScriptBuilder, ScriptBuilderResult},
-    EngineContext, TxScriptEngine,
+    EngineCtx, TxScriptEngine,
 };
 use kaspa_txscript_errors::TxScriptError::{EvalFalse, VerifyError};
 use rand::thread_rng;
@@ -61,7 +61,7 @@ fn threshold_scenario() -> ScriptBuilderResult<()> {
     // Prepare to reuse values for signature hashing
     let reused_values = SigHashReusedValuesUnsync::new();
 
-    let ctx = EngineContext::new(&reused_values, &sig_cache);
+    let ctx = EngineCtx::new(&sig_cache).with_reused(&reused_values);
 
     // Create the script builder
     let mut builder = ScriptBuilder::new();
@@ -247,7 +247,7 @@ fn threshold_scenario_limited_one_time() -> ScriptBuilderResult<()> {
     // Prepare to reuse values for signature hashing
     let reused_values = SigHashReusedValuesUnsync::new();
 
-    let ctx = EngineContext::new(&reused_values, &sig_cache);
+    let ctx = EngineCtx::new(&sig_cache).with_reused(&reused_values);
 
     // Generate the script public key
     let spk = pay_to_script_hash_script(&script);
@@ -402,7 +402,7 @@ fn threshold_scenario_limited_2_times() -> ScriptBuilderResult<()> {
     // Prepare to reuse values for signature hashing
     let reused_values = SigHashReusedValuesUnsync::new();
 
-    let ctx = EngineContext::new(&reused_values, &sig_cache);
+    let ctx = EngineCtx::new(&sig_cache).with_reused(&reused_values);
 
     // Generate the script public key
     let spk = pay_to_script_hash_script(&two_times_script);
@@ -614,7 +614,7 @@ fn shared_secret_scenario() -> ScriptBuilderResult<()> {
             &tx.inputs()[0],
             0,
             &utxo_entry,
-            EngineContext::new(&reused_values, &sig_cache),
+            EngineCtx::new(&sig_cache).with_reused(&reused_values),
             Default::default(),
         );
         assert_eq!(vm.execute(), Ok(()));
@@ -639,7 +639,7 @@ fn shared_secret_scenario() -> ScriptBuilderResult<()> {
             &tx.inputs()[0],
             0,
             &utxo_entry,
-            EngineContext::new(&reused_values, &sig_cache),
+            EngineCtx::new(&sig_cache).with_reused(&reused_values),
             Default::default(),
         );
         assert_eq!(vm.execute(), Ok(()));
@@ -664,7 +664,7 @@ fn shared_secret_scenario() -> ScriptBuilderResult<()> {
             &tx.inputs()[0],
             0,
             &utxo_entry,
-            EngineContext::new(&reused_values, &sig_cache),
+            EngineCtx::new(&sig_cache).with_reused(&reused_values),
             Default::default(),
         );
         assert_eq!(vm.execute(), Err(VerifyError));

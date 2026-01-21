@@ -1,7 +1,7 @@
 use crate::caches::Cache;
 use crate::covenants::{CovenantsContext, EMPTY_COV_CONTEXT};
 use crate::{SeqCommitAccessor, SigCacheKey};
-use kaspa_consensus_core::hashing::sighash::SigHashReusedValues;
+use kaspa_consensus_core::hashing::sighash::{SigHashReusedValues, SigHashReusedValuesSync, SigHashReusedValuesUnsync};
 
 /// Marker type indicating that sig-hash reused values have not been bound yet.
 #[derive(Default)]
@@ -9,7 +9,7 @@ pub struct MissingReusedValues;
 
 pub struct EngineContext<'a, Reused> {
     pub(crate) reused_values: &'a Reused,
-    pub(crate) sig_cache: &'a Cache<SigCacheKey, bool>,
+    pub(crate) sig_cache: &'a SigCache,
     pub(crate) covenants_ctx: &'a CovenantsContext,
     pub(crate) seq_commit_accessor: Option<&'a dyn SeqCommitAccessor>,
 }
@@ -34,18 +34,13 @@ impl<'a, Reused> EngineContext<'a, Reused> {
     }
 }
 
-impl<'a, Reused: SigHashReusedValues> EngineContext<'a, Reused> {
-    /// Create a context with bound reused values, using an empty covenants context.
-    pub fn new(reused_values: &'a Reused, sig_cache: &'a Cache<SigCacheKey, bool>) -> Self {
-        Self { reused_values, sig_cache, covenants_ctx: &EMPTY_COV_CONTEXT, seq_commit_accessor: None }
-    }
-}
+type SigCache = Cache<SigCacheKey, bool>;
 
 impl<'a> EngineContext<'a, MissingReusedValues> {
     const MISSING: MissingReusedValues = MissingReusedValues;
 
     /// Create a context without bound reused values, using an empty covenants context.
-    pub fn with_missing(sig_cache: &'a Cache<SigCacheKey, bool>) -> Self {
+    pub fn new(sig_cache: &'a SigCache) -> Self {
         Self { reused_values: &Self::MISSING, sig_cache, covenants_ctx: &EMPTY_COV_CONTEXT, seq_commit_accessor: None }
     }
 
@@ -63,3 +58,12 @@ impl<'a, Reused: SigHashReusedValues> Clone for EngineContext<'a, Reused> {
 }
 
 impl<'a, Reused: SigHashReusedValues> Copy for EngineContext<'a, Reused> {}
+
+/// Engine context before binding sig-hash reused values.
+pub type EngineCtx<'a> = EngineContext<'a, MissingReusedValues>;
+
+/// Engine context for parallel script checking (thread-safe reused values).
+pub type EngineCtxSync<'a> = EngineContext<'a, SigHashReusedValuesSync>;
+
+/// Engine context for sequential script checking (non-thread-safe reused values).
+pub type EngineCtxUnsync<'a> = EngineContext<'a, SigHashReusedValuesUnsync>;

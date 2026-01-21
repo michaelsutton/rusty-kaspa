@@ -1248,7 +1248,7 @@ opcode_list! {
                     let [idx]: [i32; 1] = vm.dstack.pop_items()?;
                     let idx = i32_to_usize(idx)?;
                     let utxo = tx.utxo(idx).ok_or_else(|| TxScriptError::InvalidInputIndex(idx as i32, tx.inputs().len()))?;
-                    // TODO: Consider adding a method to ScirptPublicKey for getting length directly, instead of converting to bytes first.
+                    // TODO: Consider adding a method to ScriptPublicKey for getting length directly, instead of converting to bytes first.
                     let len = utxo.script_public_key.to_bytes().len() as i64;
                     push_number(len, vm)
                 },
@@ -1286,7 +1286,7 @@ opcode_list! {
                     let [idx]: [i32; 1] = vm.dstack.pop_items()?;
                     let idx = i32_to_usize(idx)?;
                     let output = tx.outputs().get(idx).ok_or_else(|| TxScriptError::InvalidOutputIndex(idx as i32, tx.outputs().len()))?;
-                    // TODO: Consider adding a method to ScirptPublicKey for getting length directly, instead of converting to bytes first.
+                    // TODO: Consider adding a method to ScriptPublicKey for getting length directly, instead of converting to bytes first.
                     let len = output.script_public_key.to_bytes().len() as i64;
                     push_number(len, vm)
                 },
@@ -1417,7 +1417,7 @@ opcode_list! {
     opcode OpUnknown211<0xd3, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
     opcode OpChainblockSeqCommit<0xd4, 1>(self, vm) {
         let Some(seq_commit_accessor) = vm.ctx.seq_commit_accessor else {
-            // seq_commit_access is none if only opcode is not enabled
+            // seq_commit_access is none only if the opcode is not enabled
             return Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
         };
         let [block]: [Hash; 1] = vm.dstack.pop_items()?; // todo we actually could convert slice ref into hash ref if it was repr(transparent)
@@ -1519,7 +1519,7 @@ mod test {
     fn run_success_test_cases(tests: Vec<TestCase>) {
         let cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
-        let ctx = EngineContext::new(&reused_values, &cache);
+        let ctx = EngineContext::new(&cache).with_reused(&reused_values);
         for TestCase { init, code, dstack } in tests {
             let init: Stack = init.into();
             let dstack = dstack.into();
@@ -1533,7 +1533,7 @@ mod test {
     fn run_error_test_cases(tests: Vec<ErrorTestCase>) {
         let cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
-        let ctx = EngineContext::new(&reused_values, &cache);
+        let ctx = EngineContext::new(&cache).with_reused(&reused_values);
         for ErrorTestCase { init, code, error } in tests {
             let mut vm = TxScriptEngine::new(ctx, Default::default());
             vm.dstack = init.clone().into();
@@ -1570,7 +1570,7 @@ mod test {
 
         let cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
-        let ctx = EngineContext::new(&reused_values, &cache);
+        let ctx = EngineContext::new(&cache).with_reused(&reused_values);
         let mut vm = TxScriptEngine::new(ctx, Default::default());
 
         for pop in tests {
@@ -1601,7 +1601,7 @@ mod test {
 
         let cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
-        let ctx = EngineContext::new(&reused_values, &cache);
+        let ctx = EngineContext::new(&cache).with_reused(&reused_values);
         let mut vm = TxScriptEngine::new(ctx, Default::default());
 
         for pop in tests {
@@ -1676,7 +1676,7 @@ mod test {
 
         let cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
-        let ctx = EngineContext::new(&reused_values, &cache);
+        let ctx = EngineContext::new(&cache).with_reused(&reused_values);
         let mut vm = TxScriptEngine::new(ctx, Default::default());
 
         for pop in tests {
@@ -3261,7 +3261,7 @@ mod test {
 
         let sig_cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
-        let ctx = EngineContext::new(&reused_values, &sig_cache);
+        let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
         let code = opcodes::OpCheckLockTimeVerify::empty().expect("Should accept empty");
 
@@ -3303,7 +3303,7 @@ mod test {
 
         let sig_cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
-        let ctx = EngineContext::new(&reused_values, &sig_cache);
+        let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
         let code = opcodes::OpCheckSequenceVerify::empty().expect("Should accept empty");
 
@@ -3502,7 +3502,7 @@ mod test {
             let tx = PopulatedTransaction::new(&tx, utxo_entries);
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
             for current_idx in 0..tx.inputs().len() {
                 let mut vm = TxScriptEngine::from_transaction_input(
@@ -3740,7 +3740,7 @@ mod test {
                 let tx = PopulatedTransaction::new(&tx, utxo_entries);
                 let sig_cache = Cache::new(10_000);
                 let reused_values = SigHashReusedValuesUnsync::new();
-                let ctx = EngineContext::new(&reused_values, &sig_cache);
+                let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
                 let mut vm = TxScriptEngine::from_transaction_input(
                     &tx,
@@ -3805,7 +3805,7 @@ mod test {
             let tx = tx.as_verifiable();
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
             // Test success case
             {
@@ -3848,7 +3848,7 @@ mod test {
                 .drain();
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
             let spk = pay_to_script_hash_script(&redeem_script);
 
             // Test success case
@@ -3890,7 +3890,7 @@ mod test {
         fn test_input_spk_basic() {
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
             // Create script: 0 OP_INPUTSPK OpNop
             // Just verify that OpInputSpk pushes something onto stack
@@ -3912,7 +3912,7 @@ mod test {
         fn test_input_spk_different() {
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
             // Create script: 0 OP_INPUTSPK 1 OP_INPUTSPK OP_EQUAL OP_NOT
             // Verifies that two different inputs have different SPKs
@@ -3936,7 +3936,7 @@ mod test {
         fn test_input_spk_same() {
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
 
             // Create script: 0 OP_INPUTSPK 1 OP_INPUTSPK OP_EQUAL
             // Verifies that two inputs with same SPK are equal
@@ -3964,7 +3964,7 @@ mod test {
             let expected_spk_bytes = expected_spk.to_bytes();
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
             // Create script: 0 OP_OUTPUTSPK <expected_spk_bytes> EQUAL
             let redeem_script = ScriptBuilder::new()
                 .add_op(Op0)
@@ -4024,7 +4024,7 @@ mod test {
             let spk = pay_to_script_hash_script(&redeem_script);
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
             // Test first input (success case)
             {
                 let input_mock = Kip10Mock { spk: spk.clone(), amount: 200 };
@@ -4064,7 +4064,7 @@ mod test {
         fn test_counts() {
             let sig_cache = Cache::new(10_000);
             let reused_values = SigHashReusedValuesUnsync::new();
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
             // Test OpInputCount: "OP_INPUTCOUNT 2 EQUAL"
             let input_count_script =
                 ScriptBuilder::new().add_op(OpTxInputCount).unwrap().add_i64(2).unwrap().add_op(OpEqual).unwrap().drain();
@@ -4258,7 +4258,7 @@ mod test {
             let populated_tx = PopulatedTransaction::new(tx, entries);
             let reused_values = SigHashReusedValuesUnsync::new();
             let sig_cache = Cache::new(10_000);
-            let ctx = EngineContext::new(&reused_values, &sig_cache);
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
             let mut vm = TxScriptEngine::from_transaction_input(
                 &populated_tx,
                 &populated_tx.tx.inputs[idx],

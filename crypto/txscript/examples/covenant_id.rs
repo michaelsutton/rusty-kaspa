@@ -13,7 +13,7 @@ use kaspa_txscript::opcodes::codes::{
     OpTxOutputSpkLen, OpTxOutputSpkSubstr, OpVerify, OpWithin,
 };
 use kaspa_txscript::script_builder::{ScriptBuilder, ScriptBuilderResult};
-use kaspa_txscript::{pay_to_script_hash_script, EngineContext};
+use kaspa_txscript::{pay_to_script_hash_script, EngineCtx};
 use kaspa_txscript::{EngineFlags, TxScriptEngine};
 use kaspa_txscript_errors::TxScriptError;
 use rand::{seq::SliceRandom, Rng, RngCore, SeedableRng};
@@ -231,7 +231,7 @@ fn run_vm(
         &tx.inputs[0],
         0,
         utxo_entry,
-        EngineContext::new(reused_values, sig_cache),
+        EngineCtx::new(sig_cache).with_reused(reused_values),
         flags,
     );
     vm.execute()
