@@ -4,7 +4,7 @@ use kaspa_consensus_core::{
     tx::{TransactionInput, VerifiableTransaction},
 };
 use kaspa_txscript::{
-    covenants::{CovenantLocalContext, CovenantsContext},
+    covenants::{CovenantInputContext, CovenantsContext},
     get_sig_op_count_upper_bound, EngineCtx, EngineCtxSync, EngineCtxUnsync, EngineFlags, SeqCommitAccessor, TxScriptEngine,
 };
 use kaspa_txscript_errors::TxScriptError;
@@ -192,7 +192,7 @@ impl TransactionValidator {
 
         for (i, (_, entry)) in tx.populated_inputs().enumerate() {
             if let Some(covenant_id) = entry.covenant_id {
-                ctx.covenant_ctxs.entry(covenant_id).or_default().input_indices.push(i);
+                ctx.shared_ctxs.entry(covenant_id).or_default().input_indices.push(i);
             }
         }
 
@@ -216,13 +216,13 @@ impl TransactionValidator {
                     }
                 }
 
-                ctx.local_ctxs
+                ctx.input_ctxs
                     .entry(auth_input)
-                    .or_insert_with(|| CovenantLocalContext::new(cov_out_info.covenant_id))
+                    .or_insert_with(|| CovenantInputContext::new(cov_out_info.covenant_id))
                     .auth_outputs
                     .push(i);
 
-                ctx.covenant_ctxs.entry(cov_out_info.covenant_id).or_default().output_indices.push(i);
+                ctx.shared_ctxs.entry(cov_out_info.covenant_id).or_default().output_indices.push(i);
             }
         }
 
