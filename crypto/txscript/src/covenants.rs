@@ -1,5 +1,6 @@
+use kaspa_consensus_core::tx::VerifiableTransaction;
 use kaspa_hashes::Hash;
-use kaspa_txscript_errors::TxScriptError;
+use kaspa_txscript_errors::{CovenantsError, TxScriptError};
 use std::{collections::HashMap, sync::LazyLock};
 
 /// Context for an input's specific authority over a subset of outputs.
@@ -61,3 +62,46 @@ impl CovenantsContext {
 }
 
 pub static EMPTY_COV_CONTEXT: LazyLock<CovenantsContext> = LazyLock::new(CovenantsContext::default);
+
+impl CovenantsContext {
+    pub fn from_tx(tx: &impl VerifiableTransaction) -> Result<Self, CovenantsError> {
+        let mut ctx = CovenantsContext::default();
+
+        for (i, (_, entry)) in tx.populated_inputs().enumerate() {
+            if let Some(covenant_id) = entry.covenant_id {
+                ctx.shared_ctxs.entry(covenant_id).or_default().input_indices.push(i);
+            }
+        }
+
+        for (i, output) in tx.outputs().iter().enumerate() {
+            if let Some(covenant) = &output.covenant {
+                let auth_input = covenant.authorizing_input as usize;
+                let Some(utxo_entry) = tx.utxo(auth_input) else {
+                    return Err(CovenantsError::AuthInputOutOfBounds(i, covenant.authorizing_input));
+                };
+                if let Some(covenant_id) = utxo_entry.covenant_id {
+                    if covenant_id != covenant.covenant_id {
+                        return Err(CovenantsError::WrongCovenantId(i));
+                    }
+                } else {
+                    let authorizing_input = &tx.inputs()[auth_input]; // Guaranteed to exist from the earlier check on the UTXO entry.
+                    if kaspa_consensus_core::hashing::covenant_id::covenant_id(authorizing_input.previous_outpoint)
+                        != covenant.covenant_id
+                    {
+                        return Err(CovenantsError::WrongGenesisCovenantId(i));
+                    }
+                }
+
+                ctx.input_ctxs
+                    .entry(auth_input)
+                    .or_insert_with(|| CovenantInputContext::new(covenant.covenant_id))
+                    .auth_outputs
+                    .push(i);
+
+                ctx.shared_ctxs.entry(covenant.covenant_id).or_default().output_indices.push(i);
+            }
+        }
+
+        Ok(ctx)
+    }
+}

@@ -99,3 +99,13 @@ pub enum SerializationError {
     #[error("Number exceeds {1} bytes: {0}")]
     NumberTooLong(i64, usize),
 }
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum CovenantsError {
+    #[error("output #{0} covenant id does not correspond to the authorizing input covenant id")]
+    WrongCovenantId(usize),
+    #[error("output #{0} covenant id does not correspond to the authorizing input outpoint hashing (genesis case)")]
+    WrongGenesisCovenantId(usize),
+    #[error("output #{0} covenant authorizing input index {1} is out of bounds")]
+    AuthInputOutOfBounds(usize, u16),
+}
