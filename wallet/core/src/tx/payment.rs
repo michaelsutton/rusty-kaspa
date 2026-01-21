@@ -110,7 +110,7 @@ impl From<PaymentOutput> for TransactionOutput {
         Self::new_with_inner(TransactionOutputInner {
             script_public_key: pay_to_address_script(&value.address),
             value: value.amount,
-            cov_out_info: None,
+            covenant: todo!(),
         })
     }
 }

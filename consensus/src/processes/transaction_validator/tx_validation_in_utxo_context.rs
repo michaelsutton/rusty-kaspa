@@ -197,20 +197,20 @@ impl TransactionValidator {
         }
 
         for (i, output) in tx.outputs().iter().enumerate() {
-            if let Some(cov_out_info) = &output.cov_out_info {
-                let auth_input = cov_out_info.authorizing_input as usize;
+            if let Some(covenant) = &output.covenant {
+                let auth_input = covenant.authorizing_input as usize;
                 let Some(utxo_entry) = tx.utxo(auth_input) else {
                     // TODO: Change to another error
                     return Err(TxRuleError::MissingTxOutpoints);
                 };
                 if let Some(covenant_id) = utxo_entry.covenant_id {
-                    if covenant_id != cov_out_info.covenant_id {
+                    if covenant_id != covenant.covenant_id {
                         return Err(TxRuleError::WrongCovenantId(i));
                     }
                 } else {
                     let authorizing_input = &tx.inputs()[auth_input]; // Guaranteed to exist from the earlier check on the UTXO entry.
                     if kaspa_consensus_core::hashing::covenant_id::covenant_id(authorizing_input.previous_outpoint)
-                        != cov_out_info.covenant_id
+                        != covenant.covenant_id
                     {
                         return Err(TxRuleError::WrongCovenantId(i));
                     }
@@ -218,11 +218,11 @@ impl TransactionValidator {
 
                 ctx.input_ctxs
                     .entry(auth_input)
-                    .or_insert_with(|| CovenantInputContext::new(cov_out_info.covenant_id))
+                    .or_insert_with(|| CovenantInputContext::new(covenant.covenant_id))
                     .auth_outputs
                     .push(i);
 
-                ctx.shared_ctxs.entry(cov_out_info.covenant_id).or_default().output_indices.push(i);
+                ctx.shared_ctxs.entry(covenant.covenant_id).or_default().output_indices.push(i);
             }
         }
 
@@ -336,15 +336,11 @@ mod tests {
                 sig_op_count: 1,
             }],
             vec![
-                TransactionOutput {
-                    value: 10360487799,
-                    script_public_key: ScriptPublicKey::new(0, script_pub_key_2),
-                    cov_out_info: None,
-                },
+                TransactionOutput { value: 10360487799, script_public_key: ScriptPublicKey::new(0, script_pub_key_2), covenant: None },
                 TransactionOutput {
                     value: 10518958752,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_1.clone()),
-                    cov_out_info: None,
+                    covenant: None,
                 },
             ],
             0,
@@ -419,13 +415,9 @@ mod tests {
                 TransactionOutput {
                     value: 10360487799,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_2.clone()),
-                    cov_out_info: None,
+                    covenant: None,
                 },
-                TransactionOutput {
-                    value: 10518958752,
-                    script_public_key: ScriptPublicKey::new(0, script_pub_key_1),
-                    cov_out_info: None,
-                },
+                TransactionOutput { value: 10518958752, script_public_key: ScriptPublicKey::new(0, script_pub_key_1), covenant: None },
             ],
             0,
             SubnetworkId::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
@@ -504,12 +496,12 @@ mod tests {
                 TransactionOutput {
                     value: 10000000000000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_2),
-                    cov_out_info: None,
+                    covenant: None,
                 },
                 TransactionOutput {
                     value: 2792999990000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_1.clone()),
-                    cov_out_info: None,
+                    covenant: None,
                 },
             ],
             0,
@@ -585,12 +577,12 @@ mod tests {
                 TransactionOutput {
                     value: 10000000000000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_2),
-                    cov_out_info: None,
+                    covenant: None,
                 },
                 TransactionOutput {
                     value: 2792999990000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_1.clone()),
-                    cov_out_info: None,
+                    covenant: None,
                 },
             ],
             0,
@@ -668,12 +660,12 @@ mod tests {
                 TransactionOutput {
                     value: 10000000000000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_2),
-                    cov_out_info: None,
+                    covenant: None,
                 },
                 TransactionOutput {
                     value: 2792999990000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_1.clone()),
-                    cov_out_info: None,
+                    covenant: None,
                 },
             ],
             0,
@@ -751,12 +743,12 @@ mod tests {
                 TransactionOutput {
                     value: 10000000000000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_2),
-                    cov_out_info: None,
+                    covenant: None,
                 },
                 TransactionOutput {
                     value: 2792999990000,
                     script_public_key: ScriptPublicKey::new(0, script_pub_key_1.clone()),
-                    cov_out_info: None,
+                    covenant: None,
                 },
             ],
             0,
@@ -827,7 +819,7 @@ mod tests {
             vec![TransactionOutput {
                 value: 2792999990000,
                 script_public_key: ScriptPublicKey::new(0, script_pub_key_1.clone()),
-                cov_out_info: None,
+                covenant: None,
             }],
             0,
             SubnetworkId::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
@@ -904,16 +896,8 @@ mod tests {
                 },
             ],
             vec![
-                TransactionOutput {
-                    value: 300,
-                    script_public_key: ScriptPublicKey::new(0, script_pub_key.clone()),
-                    cov_out_info: None,
-                },
-                TransactionOutput {
-                    value: 300,
-                    script_public_key: ScriptPublicKey::new(0, script_pub_key.clone()),
-                    cov_out_info: None,
-                },
+                TransactionOutput { value: 300, script_public_key: ScriptPublicKey::new(0, script_pub_key.clone()), covenant: None },
+                TransactionOutput { value: 300, script_public_key: ScriptPublicKey::new(0, script_pub_key.clone()), covenant: None },
             ],
             1615462089000,
             SubnetworkId::from_bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),

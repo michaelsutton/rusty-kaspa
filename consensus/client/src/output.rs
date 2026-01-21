@@ -54,7 +54,7 @@ extern "C" {
 pub struct TransactionOutputInner {
     pub value: u64,
     pub script_public_key: ScriptPublicKey,
-    pub cov_out_info: Option<cctx::CovOutInfo>,
+    pub covenant: Option<cctx::CovenantBinding>,
 }
 
 /// Represents a Kaspad transaction output
@@ -67,8 +67,8 @@ pub struct TransactionOutput {
 }
 
 impl TransactionOutput {
-    pub fn new(value: u64, script_public_key: ScriptPublicKey, cov_out_info: Option<cctx::CovOutInfo>) -> TransactionOutput {
-        Self { inner: Arc::new(Mutex::new(TransactionOutputInner { value, script_public_key, cov_out_info })) }
+    pub fn new(value: u64, script_public_key: ScriptPublicKey, covenant: Option<cctx::CovenantBinding>) -> TransactionOutput {
+        Self { inner: Arc::new(Mutex::new(TransactionOutputInner { value, script_public_key, covenant })) }
     }
 
     pub fn new_with_inner(inner: TransactionOutputInner) -> Self {
@@ -88,10 +88,8 @@ impl TransactionOutput {
 impl TransactionOutput {
     #[wasm_bindgen(constructor)]
     /// TransactionOutput constructor
-    pub fn ctor(value: u64, script_public_key: &ScriptPublicKey, cov_out_info: Option<cctx::CovOutInfo>) -> TransactionOutput {
-        Self {
-            inner: Arc::new(Mutex::new(TransactionOutputInner { value, script_public_key: script_public_key.clone(), cov_out_info })),
-        }
+    pub fn ctor(value: u64, script_public_key: &ScriptPublicKey, covenant: Option<cctx::CovenantBinding>) -> TransactionOutput {
+        Self { inner: Arc::new(Mutex::new(TransactionOutputInner { value, script_public_key: script_public_key.clone(), covenant })) }
     }
 
     #[wasm_bindgen(getter, js_name = value)]
@@ -123,13 +121,13 @@ impl AsRef<TransactionOutput> for TransactionOutput {
 
 impl From<cctx::TransactionOutput> for TransactionOutput {
     fn from(output: cctx::TransactionOutput) -> Self {
-        TransactionOutput::new(output.value, output.script_public_key, output.cov_out_info)
+        TransactionOutput::new(output.value, output.script_public_key, output.covenant)
     }
 }
 
 impl From<&cctx::TransactionOutput> for TransactionOutput {
     fn from(output: &cctx::TransactionOutput) -> Self {
-        TransactionOutput::new(output.value, output.script_public_key.clone(), output.cov_out_info)
+        TransactionOutput::new(output.value, output.script_public_key.clone(), output.covenant)
     }
 }
 
@@ -150,8 +148,8 @@ impl TryCastFromJs for TransactionOutput {
             if let Some(object) = Object::try_from(value.as_ref()) {
                 let value = object.get_u64("value")?;
                 let script_public_key = ScriptPublicKey::try_owned_from(object.get_value("scriptPublicKey")?)?;
-                let cov_out_info = todo!();
-                Ok(TransactionOutput::new(value, script_public_key, cov_out_info).into())
+                let covenant = todo!();
+                Ok(TransactionOutput::new(value, script_public_key, covenant).into())
             } else {
                 Err("TransactionInput must be an object".into())
             }

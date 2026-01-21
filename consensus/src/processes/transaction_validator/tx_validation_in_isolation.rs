@@ -164,8 +164,8 @@ fn check_transaction_subnetwork(tx: &Transaction) -> TxResult<()> {
 
 fn check_tx_version_specific_fields(tx: &Transaction) -> TxResult<()> {
     for (i, output) in tx.outputs.iter().enumerate() {
-        if tx.version < 1 && output.cov_out_info.is_some() {
-            return Err(TxRuleError::CovOutInfoInPreCovTxVersion(i));
+        if tx.version < 1 && output.covenant.is_some() {
+            return Err(TxRuleError::CovenantBindingInPreCovTxVersion(i));
         }
     }
 
@@ -214,7 +214,7 @@ mod tests {
                         0x30, 0xcd, 0x5a, 0x4b, 0x87
                     ),
                 ),
-                cov_out_info: None,
+                covenant: None,
             }],
             0,
             SUBNETWORK_ID_COINBASE,
@@ -264,7 +264,7 @@ mod tests {
                             0xac  // OP_CHECKSIG
                         ),
                     ),
-                    cov_out_info: None,
+                    covenant: None,
                 },
                 TransactionOutput {
                     value: 0x108e20f00,
@@ -279,7 +279,7 @@ mod tests {
                             0xac  // OP_CHECKSIG
                         ),
                     ),
-                    cov_out_info: None,
+                    covenant: None,
                 },
             ],
             0,

@@ -27,7 +27,7 @@ impl MuHashExtensions for MuHash {
                 output.script_public_key.clone(),
                 block_daa_score,
                 tx.is_coinbase(),
-                output.cov_out_info.map(|info| info.covenant_id),
+                output.covenant.map(|info| info.covenant_id),
             );
             self.add_utxo(&outpoint, &entry);
         }

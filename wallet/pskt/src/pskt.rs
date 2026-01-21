@@ -149,7 +149,7 @@ impl<R> PSKT<R> {
                 .map(|Output { amount, script_public_key, .. }: &Output| TransactionOutput {
                     value: *amount,
                     script_public_key: script_public_key.clone(),
-                    cov_out_info: None,
+                    covenant: todo!(),
                 })
                 .collect(),
             self.determine_lock_time(),

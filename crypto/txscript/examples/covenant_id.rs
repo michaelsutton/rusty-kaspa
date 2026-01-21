@@ -2,7 +2,7 @@ use kaspa_consensus_core::hashing;
 use kaspa_consensus_core::hashing::sighash::SigHashReusedValuesUnsync;
 use kaspa_consensus_core::subnets::SubnetworkId;
 use kaspa_consensus_core::tx::{
-    CovOutInfo, PopulatedTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput,
+    CovenantBinding, PopulatedTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput,
     UtxoEntry,
 };
 use kaspa_hashes::Hash;
@@ -107,7 +107,7 @@ impl CovenantState {
 fn build_covenant_script() -> ScriptBuilderResult<Vec<u8>> {
     let p2sh_prefix = [
         0,
-        0, // Script version 0
+        0, // Script version 0 (two bytes)
         kaspa_txscript::opcodes::codes::OpBlake2b,
         kaspa_txscript::opcodes::codes::OpData32,
     ];
@@ -197,7 +197,7 @@ fn build_spend_tx(state: &CovenantState, next_counter: u8, covenant_script: &[u8
 
     let input = TransactionInput::new(state.utxo_outpoint, sig_script, 0, 0);
     let mut output = TransactionOutput::new(state.utxo_entry.amount - 10, build_spk(next_counter, covenant_script));
-    output.cov_out_info = Some(CovOutInfo { covenant_id: state.covenant_id, authorizing_input: 0 });
+    output.covenant = Some(CovenantBinding { covenant_id: state.covenant_id, authorizing_input: 0 });
 
     let mut outputs = vec![output];
 

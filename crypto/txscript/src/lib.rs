@@ -722,7 +722,7 @@ mod tests {
             let output = TransactionOutput {
                 value: 1000000000,
                 script_public_key: ScriptPublicKey::new(0, test.script.into()),
-                cov_out_info: None,
+                covenant: None,
             };
 
             let tx = Transaction::new(1, vec![input.clone()], vec![output.clone()], 0, Default::default(), 0, vec![]);

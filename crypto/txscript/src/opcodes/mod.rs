@@ -4151,8 +4151,8 @@ mod test {
         use kaspa_consensus_core::hashing::sighash::SigHashReusedValuesUnsync;
         use kaspa_consensus_core::subnets::SubnetworkId;
         use kaspa_consensus_core::tx::{
-            CovOutInfo, PopulatedTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput,
-            UtxoEntry,
+            CovenantBinding, PopulatedTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint,
+            TransactionOutput, UtxoEntry,
         };
         use kaspa_hashes::Hash;
 
@@ -4197,7 +4197,7 @@ mod test {
             (tx, entries)
         }
 
-        fn create_transaction_with_cov_out_info() -> (Transaction, Vec<UtxoEntry>) {
+        fn create_transaction_with_covenant() -> (Transaction, Vec<UtxoEntry>) {
             let version: u16 = 5;
             let lock_time: u64 = 0;
             let subnetwork_id = SubnetworkId::from_bytes([9u8; 20]);
@@ -4215,17 +4215,17 @@ mod test {
                 TransactionOutput {
                     value: 11,
                     script_public_key: ScriptPublicKey::new(0, spk.clone().into()),
-                    cov_out_info: Some(CovOutInfo { authorizing_input: 0, covenant_id: Hash::from_u64_word(1) }),
+                    covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: Hash::from_u64_word(1) }),
                 },
                 TransactionOutput {
                     value: 22,
                     script_public_key: ScriptPublicKey::new(0, spk.clone().into()),
-                    cov_out_info: Some(CovOutInfo { authorizing_input: 1, covenant_id: Hash::from_u64_word(2) }),
+                    covenant: Some(CovenantBinding { authorizing_input: 1, covenant_id: Hash::from_u64_word(2) }),
                 },
                 TransactionOutput {
                     value: 33,
                     script_public_key: ScriptPublicKey::new(0, spk.clone().into()),
-                    cov_out_info: Some(CovOutInfo { authorizing_input: 0, covenant_id: Hash::from_u64_word(3) }),
+                    covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: Hash::from_u64_word(3) }),
                 },
                 TransactionOutput::new(44, ScriptPublicKey::new(0, spk.into())),
             ];
@@ -4440,7 +4440,7 @@ mod test {
 
         #[test]
         fn cov_output_count() {
-            let (tx, entries) = create_transaction_with_cov_out_info();
+            let (tx, entries) = create_transaction_with_covenant();
 
             for (input_idx, expected_count) in [(0, 2), (1, 1)] {
                 let spk = script(|sb| {
@@ -4456,7 +4456,7 @@ mod test {
 
         #[test]
         fn cov_output_idx() {
-            let (tx, entries) = create_transaction_with_cov_out_info();
+            let (tx, entries) = create_transaction_with_covenant();
 
             for (input_idx, authorized_idx, expected_output_idx) in [(0, 0, 0), (0, 1, 2), (1, 0, 1)] {
                 let spk = script(|sb| {
