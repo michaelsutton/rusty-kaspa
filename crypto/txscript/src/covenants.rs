@@ -20,6 +20,7 @@ pub struct CovenantLocalContext {
 ///
 /// Used for verifying global invariants across all participants of the same covenant
 /// (e.g., merges, batching, or conservation of amounts).
+#[derive(Default)]
 pub struct CovenantGlobalContext {
     /// Indices of *all* inputs in the transaction carrying this `covenant_id`.
     pub input_indices: Vec<usize>,

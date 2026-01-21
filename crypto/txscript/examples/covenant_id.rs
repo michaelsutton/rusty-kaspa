@@ -8,9 +8,8 @@ use kaspa_consensus_core::tx::{
 use kaspa_hashes::Hash;
 use kaspa_txscript::caches::Cache;
 use kaspa_txscript::opcodes::codes::{
-    Op1, Op1Add, OpBin2Num, OpBlake2b, OpCat, OpCovOutputCount, OpCovOutputIdx, OpData60, OpData61, OpData62, OpData8, OpDrop, OpDup,
-    OpEqual, OpEqualVerify, OpNum2Bin, OpSub, OpSwap, OpTrue, OpTxInputIndex, OpTxInputScriptSigLen, OpTxInputScriptSigSubstr,
-    OpTxOutputSpkLen, OpTxOutputSpkSubstr, OpVerify, OpWithin,
+    Op1Add, OpBlake2b, OpCat, OpCovOutputCount, OpCovOutputIdx, OpData62, OpData8, OpEqual, OpEqualVerify, OpNum2Bin, OpSwap, OpTrue,
+    OpTxInputIndex, OpTxInputScriptSigLen, OpTxInputScriptSigSubstr, OpTxOutputSpkLen, OpTxOutputSpkSubstr,
 };
 use kaspa_txscript::script_builder::{ScriptBuilder, ScriptBuilderResult};
 use kaspa_txscript::{pay_to_script_hash_script, EngineCtx};

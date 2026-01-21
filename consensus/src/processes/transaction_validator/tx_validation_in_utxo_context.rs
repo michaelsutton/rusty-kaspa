@@ -4,7 +4,7 @@ use kaspa_consensus_core::{
     tx::{TransactionInput, VerifiableTransaction},
 };
 use kaspa_txscript::{
-    covenants::{CovenantGlobalContext, CovenantLocalContext, CovenantsContext},
+    covenants::{CovenantLocalContext, CovenantsContext},
     get_sig_op_count_upper_bound, EngineCtx, EngineCtxSync, EngineCtxUnsync, EngineFlags, SeqCommitAccessor, TxScriptEngine,
 };
 use kaspa_txscript_errors::TxScriptError;
@@ -192,14 +192,7 @@ impl TransactionValidator {
 
         for (i, (_, entry)) in tx.populated_inputs().enumerate() {
             if let Some(covenant_id) = entry.covenant_id {
-                match ctx.covenant_ctxs.entry(covenant_id) {
-                    Entry::Occupied(mut e) => {
-                        e.get_mut().input_indices.push(i);
-                    }
-                    Entry::Vacant(e) => {
-                        e.insert(CovenantGlobalContext { input_indices: vec![i], output_indices: Default::default() });
-                    }
-                }
+                ctx.covenant_ctxs.entry(covenant_id).or_default().input_indices.push(i);
             }
         }
 
@@ -232,14 +225,7 @@ impl TransactionValidator {
                     }
                 }
 
-                match ctx.covenant_ctxs.entry(cov_out_info.covenant_id) {
-                    Entry::Occupied(mut e) => {
-                        e.get_mut().output_indices.push(i);
-                    }
-                    Entry::Vacant(e) => {
-                        e.insert(CovenantGlobalContext { input_indices: Default::default(), output_indices: vec![i] });
-                    }
-                }
+                ctx.covenant_ctxs.entry(cov_out_info.covenant_id).or_default().output_indices.push(i);
             }
         }
 
