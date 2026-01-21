@@ -10,7 +10,7 @@ use kaspa_txscript::{
 use kaspa_txscript_errors::TxScriptError;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPool;
-use std::{collections::hash_map::Entry, marker::Sync};
+use std::marker::Sync;
 
 use super::{
     errors::{TxResult, TxRuleError},
@@ -216,14 +216,11 @@ impl TransactionValidator {
                     }
                 }
 
-                match ctx.local_ctxs.entry(auth_input) {
-                    Entry::Occupied(mut e) => {
-                        e.get_mut().auth_outputs.push(i);
-                    }
-                    Entry::Vacant(e) => {
-                        e.insert(CovenantLocalContext { covenant_id: cov_out_info.covenant_id, auth_outputs: vec![i] });
-                    }
-                }
+                ctx.local_ctxs
+                    .entry(auth_input)
+                    .or_insert_with(|| CovenantLocalContext::new(cov_out_info.covenant_id))
+                    .auth_outputs
+                    .push(i);
 
                 ctx.covenant_ctxs.entry(cov_out_info.covenant_id).or_default().output_indices.push(i);
             }

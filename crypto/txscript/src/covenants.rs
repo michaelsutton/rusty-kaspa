@@ -16,6 +16,12 @@ pub struct CovenantLocalContext {
     pub auth_outputs: Vec<usize>,
 }
 
+impl CovenantLocalContext {
+    pub fn new(covenant_id: Hash) -> Self {
+        Self { covenant_id, auth_outputs: Default::default() }
+    }
+}
+
 /// Context for the transaction-wide state of a specific Covenant ID.
 ///
 /// Used for verifying global invariants across all participants of the same covenant
