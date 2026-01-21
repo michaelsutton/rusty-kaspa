@@ -1358,6 +1358,9 @@ opcode_list! {
                 ScriptSource::TxInput{tx, ..} => {
                     let [input_idx]: [i32; 1] = vm.dstack.pop_items()?;
                     let input_idx = i32_to_usize(input_idx)?;
+                    if input_idx >= tx.inputs().len() {
+                        return Err(TxScriptError::InvalidInputIndex(input_idx.try_into().expect("casted above"), tx.inputs().len()));
+                    }
                     let count = vm.covenants_ctx.num_auth_outputs(input_idx)?;
                     push_number(count as i64, vm)
                 },
@@ -1374,6 +1377,9 @@ opcode_list! {
                 ScriptSource::TxInput{tx, ..} => {
                     let [input_idx, k]: [i32; 2] = vm.dstack.pop_items()?;
                     let (input_idx, k) = (i32_to_usize(input_idx)?, i32_to_usize(k)?);
+                    if input_idx >= tx.inputs().len() {
+                        return Err(TxScriptError::InvalidInputIndex(input_idx.try_into().expect("casted above"), tx.inputs().len()));
+                    }
                     let output_idx = vm.covenants_ctx.auth_output_index(input_idx, k)?;
                     push_number(output_idx as i64, vm)
                 },
@@ -4146,6 +4152,7 @@ mod test {
     #[cfg(test)]
     mod introspection {
         use super::*;
+        use crate::covenants::CovenantsContext;
         use crate::script_builder::{ScriptBuilder, ScriptBuilderResult};
         use crate::{opcodes::codes, EngineFlags, SpkEncoding};
         use kaspa_consensus_core::hashing::sighash::SigHashReusedValuesUnsync;
@@ -4225,7 +4232,7 @@ mod test {
                 TransactionOutput {
                     value: 33,
                     script_public_key: ScriptPublicKey::new(0, spk.clone().into()),
-                    covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: Hash::from_u64_word(3) }),
+                    covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: Hash::from_u64_word(1) }),
                 },
                 TransactionOutput::new(44, ScriptPublicKey::new(0, spk.into())),
             ];
@@ -4235,8 +4242,8 @@ mod test {
 
             let utxo_spk = ScriptBuilder::new().add_op(codes::OpTrue).expect("spk build").drain();
             let entries = vec![
-                UtxoEntry::new(1000, ScriptPublicKey::new(0, utxo_spk.clone().into()), 0, false, None),
-                UtxoEntry::new(1000, ScriptPublicKey::new(0, utxo_spk.into()), 0, false, None),
+                UtxoEntry::new(1000, ScriptPublicKey::new(0, utxo_spk.clone().into()), 0, false, Some(Hash::from_u64_word(1))),
+                UtxoEntry::new(1000, ScriptPublicKey::new(0, utxo_spk.into()), 0, false, Some(Hash::from_u64_word(2))),
             ];
 
             (tx, entries)
@@ -4256,9 +4263,10 @@ mod test {
         fn run_script(tx: &Transaction, mut entries: Vec<UtxoEntry>, idx: usize, script: Vec<u8>) -> Result<(), TxScriptError> {
             entries[idx].script_public_key = ScriptPublicKey::new(0, script.into());
             let populated_tx = PopulatedTransaction::new(tx, entries);
-            let reused_values = SigHashReusedValuesUnsync::new();
             let sig_cache = Cache::new(10_000);
-            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values);
+            let reused_values = SigHashReusedValuesUnsync::new();
+            let covenants_ctx = CovenantsContext::from_tx(&populated_tx)?;
+            let ctx = EngineContext::new(&sig_cache).with_reused(&reused_values).with_covenants_ctx(&covenants_ctx);
             let mut vm = TxScriptEngine::from_transaction_input(
                 &populated_tx,
                 &populated_tx.tx.inputs[idx],

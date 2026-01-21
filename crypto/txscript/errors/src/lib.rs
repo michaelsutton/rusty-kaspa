@@ -92,6 +92,8 @@ pub enum TxScriptError {
     BlockAlreadyPruned(String),
     #[error("block {0} is too deep")]
     BlockIsTooDeep(String),
+    #[error("covenants error: {0}")]
+    CovenantsError(#[from] CovenantsError),
 }
 
 #[derive(Error, PartialEq, Eq, Debug, Clone, Copy)]

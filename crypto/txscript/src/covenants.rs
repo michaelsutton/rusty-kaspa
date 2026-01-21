@@ -48,22 +48,29 @@ pub struct CovenantsContext {
     pub shared_ctxs: HashMap<Hash, CovenantSharedContext>,
 }
 
+pub static EMPTY_COV_CONTEXT: LazyLock<CovenantsContext> = LazyLock::new(CovenantsContext::default);
+
 impl CovenantsContext {
-    /// Returns the absolute transaction output index for the K-th authorized output.
+    /// Returns the absolute transaction output index of the k-th authorized output.
+    ///
+    /// Missing input contexts are treated as having zero authorized outputs.
     pub(crate) fn auth_output_index(&self, input_idx: usize, k: usize) -> Result<usize, TxScriptError> {
-        let auth_outputs = &self.input_ctxs.get(&input_idx).ok_or(TxScriptError::InvalidCovInputIndex(input_idx as i32))?.auth_outputs;
+        let auth_outputs = self.input_ctxs.get(&input_idx).map(|ctx| ctx.auth_outputs.as_slice()).unwrap_or(&[]);
         auth_outputs.get(k).copied().ok_or(TxScriptError::InvalidCovOutIndex(k, input_idx, auth_outputs.len()))
     }
 
     /// Returns the number of outputs authorized by this input.
+    ///
+    /// Missing input contexts are treated as having zero authorized outputs.
     pub(crate) fn num_auth_outputs(&self, input_idx: usize) -> Result<usize, TxScriptError> {
-        Ok(self.input_ctxs.get(&input_idx).ok_or(TxScriptError::InvalidCovInputIndex(input_idx as i32))?.auth_outputs.len())
+        Ok(self.input_ctxs.get(&input_idx).map_or(0, |ctx| ctx.auth_outputs.len()))
     }
-}
 
-pub static EMPTY_COV_CONTEXT: LazyLock<CovenantsContext> = LazyLock::new(CovenantsContext::default);
-
-impl CovenantsContext {
+    /// Constructs the covenants execution context for a transaction.
+    ///
+    /// Collects per-input and shared covenant relations from the transaction,
+    /// validating covenant bindings and handling both continuation and genesis
+    /// cases. Genesis outputs are validated but do not populate covenant contexts.
     pub fn from_tx(tx: &impl VerifiableTransaction) -> Result<Self, CovenantsError> {
         let mut ctx = CovenantsContext::default();
 
