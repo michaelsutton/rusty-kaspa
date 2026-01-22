@@ -26,7 +26,7 @@ pub fn set_log_level(level: LevelFilter) {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn init_logger(log_dir: Option<&str>, filters: &str) {
     use crate::log::appender::AppenderSpec;
-    use log4rs::{Config, config::Root};
+    use log4rs::{config::Root, Config};
     use std::iter::once;
 
     const CONSOLE_APPENDER: &str = "stdout";
@@ -62,7 +62,7 @@ pub fn init_logger(log_dir: Option<&str>, filters: &str) {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn try_init_logger(filters: &str) {
     use crate::log::appender::AppenderSpec;
-    use log4rs::{Config, config::Root};
+    use log4rs::{config::Root, Config};
 
     const CONSOLE_APPENDER: &str = "stdout";
 

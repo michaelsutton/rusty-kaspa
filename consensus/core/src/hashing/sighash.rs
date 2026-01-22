@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::tx::{ScriptPublicKey, Transaction, TransactionOutpoint, TransactionOutput, VerifiableTransaction};
 
-use super::{HasherExtensions, sighash_type::SigHashType};
+use super::{sighash_type::SigHashType, HasherExtensions};
 
 /// Holds all fields used in the calculation of a transaction's sig_hash which are
 /// the same for all transaction inputs.
@@ -284,7 +284,7 @@ mod tests {
 
     use crate::{
         hashing::sighash_type::{SIG_HASH_ALL, SIG_HASH_ANY_ONE_CAN_PAY, SIG_HASH_NONE, SIG_HASH_SINGLE},
-        subnets::{SUBNETWORK_ID_NATIVE, SubnetworkId},
+        subnets::{SubnetworkId, SUBNETWORK_ID_NATIVE},
         tx::{PopulatedTransaction, Transaction, TransactionId, TransactionInput, UtxoEntry},
     };
 

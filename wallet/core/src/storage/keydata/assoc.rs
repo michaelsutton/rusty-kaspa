@@ -1,6 +1,6 @@
 use crate::imports::*;
 use itertools::Either;
-use std::iter::{Empty, Once, empty, once};
+use std::iter::{empty, once, Empty, Once};
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "lowercase")]

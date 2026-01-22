@@ -1,25 +1,24 @@
 use crate::{
     flow_context::FlowContext,
     flow_trait::Flow,
-    ibd::{HeadersChunkStream, TrustedEntryStream, negotiate::ChainNegotiationOutput},
+    ibd::{negotiate::ChainNegotiationOutput, HeadersChunkStream, TrustedEntryStream},
 };
-use futures::future::{Either, join_all, select, try_join_all};
+use futures::future::{join_all, select, try_join_all, Either};
 use itertools::Itertools;
 use kaspa_consensus_core::{
-    BlockHashSet,
     api::BlockValidationFuture,
     block::Block,
     header::Header,
     pruning::{PruningPointProof, PruningPointsList, PruningProofMetadata},
     trusted::TrustedBlock,
     tx::Transaction,
+    BlockHashSet,
 };
-use kaspa_consensusmanager::{ConsensusProxy, StagingConsensus, spawn_blocking};
+use kaspa_consensusmanager::{spawn_blocking, ConsensusProxy, StagingConsensus};
 use kaspa_core::{debug, info, time::unix_now, warn};
 use kaspa_hashes::Hash;
 use kaspa_muhash::MuHash;
 use kaspa_p2p_lib::{
-    IncomingRoute, Router,
     common::ProtocolError,
     convert::{
         header::{HeaderFormat, Versioned},
@@ -27,10 +26,10 @@ use kaspa_p2p_lib::{
     },
     dequeue_with_timeout, make_message, make_request,
     pb::{
-        RequestAntipastMessage, RequestBlockBodiesMessage, RequestHeadersMessage, RequestIbdBlocksMessage,
+        kaspad_message::Payload, RequestAntipastMessage, RequestBlockBodiesMessage, RequestHeadersMessage, RequestIbdBlocksMessage,
         RequestPruningPointAndItsAnticoneMessage, RequestPruningPointProofMessage, RequestPruningPointUtxoSetMessage,
-        kaspad_message::Payload,
     },
+    IncomingRoute, Router,
 };
 use kaspa_utils::channel::JobReceiver;
 use std::{
@@ -39,7 +38,7 @@ use std::{
 };
 use tokio::time::sleep;
 
-use super::{HeadersChunk, IBD_BATCH_SIZE, PruningPointUtxosetChunkStream, progress::ProgressReporter};
+use super::{progress::ProgressReporter, HeadersChunk, PruningPointUtxosetChunkStream, IBD_BATCH_SIZE};
 type BlockBody = Vec<Transaction>;
 
 /// Flow for managing IBD - Initial Block Download

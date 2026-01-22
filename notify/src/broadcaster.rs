@@ -5,7 +5,7 @@ use crate::{
     events::{EventArray, EventType},
     listener::ListenerId,
     notification::Notification,
-    subscription::{BroadcastingSingle, DynSubscription, context::SubscriptionContext},
+    subscription::{context::SubscriptionContext, BroadcastingSingle, DynSubscription},
 };
 use async_channel::{Receiver, Sender};
 use core::fmt::Debug;
@@ -17,8 +17,8 @@ use std::{
     collections::HashMap,
     fmt::Display,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
 };
 use workflow_core::channel::Channel;
@@ -262,11 +262,11 @@ mod tests {
         listener::Listener,
         notification::test_helpers::*,
         notifier::test_helpers::{
-            SYNC_MAX_DELAY, Step, TestConnection, overall_test_steps, utxos_changed_test_steps, virtual_chain_changed_test_steps,
+            overall_test_steps, utxos_changed_test_steps, virtual_chain_changed_test_steps, Step, TestConnection, SYNC_MAX_DELAY,
         },
         subscription::context::SubscriptionContext,
     };
-    use async_channel::{Sender, unbounded};
+    use async_channel::{unbounded, Sender};
     use tokio::time::timeout;
 
     type TestBroadcaster = Broadcaster<TestNotification, ChannelConnection<TestNotification>>;
@@ -330,7 +330,11 @@ mod tests {
                         if outcome.has_new_state() {
                             trace!(
                                 "{} #{} - {}: - L{} has the new state {:?}",
-                                self.name, step_idx, step.name, idx, self.listeners[idx].subscriptions[event]
+                                self.name,
+                                step_idx,
+                                step.name,
+                                idx,
+                                self.listeners[idx].subscriptions[event]
                             );
                             let ctl = match mutation.active() {
                                 true => Ctl::Register(
@@ -357,12 +361,20 @@ mod tests {
                         } else if outcome.has_changes() {
                             trace!(
                                 "{} #{} - {}: - L{} is inner changed into {:?}",
-                                self.name, step_idx, step.name, idx, self.listeners[idx].subscriptions[event]
+                                self.name,
+                                step_idx,
+                                step.name,
+                                idx,
+                                self.listeners[idx].subscriptions[event]
                             );
                         } else {
                             trace!(
                                 "{} #{} - {}: - L{} is unchanged {:?}",
-                                self.name, step_idx, step.name, idx, self.listeners[idx].subscriptions[event]
+                                self.name,
+                                step_idx,
+                                step.name,
+                                idx,
+                                self.listeners[idx].subscriptions[event]
                             );
                         }
                     }

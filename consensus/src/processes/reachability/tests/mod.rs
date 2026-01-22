@@ -11,19 +11,19 @@ use crate::{
     processes::{
         ghostdag::mergeset::unordered_mergeset_without_selected_parent,
         reachability::interval::Interval,
-        relations::{RelationsStoreExtensions, delete_reachability_relations, init as relations_init},
+        relations::{delete_reachability_relations, init as relations_init, RelationsStoreExtensions},
     },
 };
 use itertools::Itertools;
 use kaspa_consensus_core::{
-    BlockHashMap, BlockHashSet,
     blockhash::{BlockHashExtensions, BlockHashes, ORIGIN},
+    BlockHashMap, BlockHashSet,
 };
 use kaspa_database::prelude::{DirectWriter, StoreError};
 use kaspa_hashes::Hash;
 use std::collections::{
-    VecDeque,
     hash_map::Entry::{Occupied, Vacant},
+    VecDeque,
 };
 use thiserror::Error;
 

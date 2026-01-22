@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer, Serializer};
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 use std::str;
 

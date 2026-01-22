@@ -12,7 +12,11 @@ impl<T, U: TryFrom<T, Error = ConversionError>> TryFromOptionEx<Option<T>> for U
     type Error = ConversionError;
 
     fn try_from_ex(value: Option<T>) -> Result<Self, Self::Error> {
-        if let Some(inner) = value { Ok(inner.try_into()?) } else { Err(ConversionError::NoneValue) }
+        if let Some(inner) = value {
+            Ok(inner.try_into()?)
+        } else {
+            Err(ConversionError::NoneValue)
+        }
     }
 }
 
@@ -20,7 +24,11 @@ impl<'a, T: 'a, U: TryFrom<&'a T, Error = ConversionError>> TryFromOptionEx<&'a 
     type Error = ConversionError;
 
     fn try_from_ex(value: &'a Option<T>) -> Result<Self, Self::Error> {
-        if let Some(inner) = value { Ok(inner.try_into()?) } else { Err(ConversionError::NoneValue) }
+        if let Some(inner) = value {
+            Ok(inner.try_into()?)
+        } else {
+            Err(ConversionError::NoneValue)
+        }
     }
 }
 

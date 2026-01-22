@@ -60,8 +60,8 @@
 use crate::imports::*;
 use crate::result::Result;
 use crate::tx::{
-    Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, PendingTransactionIterator,
-    PendingTransactionStream, mass::*,
+    mass::*, Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, PendingTransactionIterator,
+    PendingTransactionStream,
 };
 use crate::utxo::{NetworkParams, UtxoContext, UtxoEntryReference};
 use kaspa_consensus_client::UtxoEntry;

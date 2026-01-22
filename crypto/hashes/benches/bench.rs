@@ -1,6 +1,6 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use kaspa_hashes::*;
-use rand::{Rng, RngCore, thread_rng};
+use rand::{thread_rng, Rng, RngCore};
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::{CShake256, CShake256Core};
 use std::any::type_name;

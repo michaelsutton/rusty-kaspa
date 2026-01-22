@@ -10,9 +10,9 @@ use kaspa_core::{
     trace, warn,
 };
 use kaspa_notify::{
-    events::{EVENT_TYPE_ARRAY, EventSwitches},
+    events::{EventSwitches, EVENT_TYPE_ARRAY},
     subscriber::Subscriber,
-    subscription::{MutationPolicies, UtxosChangedMutationPolicy, context::SubscriptionContext},
+    subscription::{context::SubscriptionContext, MutationPolicies, UtxosChangedMutationPolicy},
 };
 use kaspa_utils::triggers::SingleTrigger;
 use std::sync::Arc;

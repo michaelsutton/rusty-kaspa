@@ -1,14 +1,18 @@
 use dashmap::DashMap;
 use std::fmt;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use workflow_log::log_info;
 
 pub fn toggle(flag: &Arc<AtomicBool>) -> &'static str {
     let v = !flag.load(Ordering::SeqCst);
     flag.store(v, Ordering::SeqCst);
-    if v { "on" } else { "off" }
+    if v {
+        "on"
+    } else {
+        "off"
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

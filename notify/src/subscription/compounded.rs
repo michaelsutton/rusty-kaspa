@@ -2,7 +2,7 @@ use crate::{
     address::{error::Result, tracker::Counters},
     events::EventType,
     scope::{Scope, UtxosChangedScope, VirtualChainChangedScope},
-    subscription::{Command, Compounded, Mutation, Subscription, context::SubscriptionContext},
+    subscription::{context::SubscriptionContext, Command, Compounded, Mutation, Subscription},
 };
 use itertools::Itertools;
 use kaspa_addresses::{Address, Prefix};

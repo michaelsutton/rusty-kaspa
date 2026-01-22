@@ -1,11 +1,11 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use rayon::prelude::*;
 
 use kaspa_consensus_core::{
-    Hash,
     constants::TX_VERSION,
     subnets::SUBNETWORK_ID_NATIVE,
     tx::{ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput},
+    Hash,
 };
 
 fn constuct_tx() -> Transaction {

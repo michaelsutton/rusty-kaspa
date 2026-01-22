@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    resolver::{KaspadResponseReceiver, KaspadResponseSender, Resolver, matcher::Matcher},
+    resolver::{matcher::Matcher, KaspadResponseReceiver, KaspadResponseSender, Resolver},
 };
 use kaspa_core::trace;
 use kaspa_grpc_core::{

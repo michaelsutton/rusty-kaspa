@@ -2,8 +2,8 @@ use super::{error::ConversionError, option::TryIntoOptionEx};
 use crate::convert::header::Versioned;
 use crate::pb as protowire;
 use kaspa_consensus_core::{
-    BlockHashMap, BlueWorkType, HashMapCustomHasher, KType,
     trusted::{ExternalGhostdagData, TrustedGhostdagData, TrustedHeader},
+    BlockHashMap, BlueWorkType, HashMapCustomHasher, KType,
 };
 use kaspa_hashes::Hash;
 use std::sync::Arc;

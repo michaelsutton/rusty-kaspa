@@ -1,6 +1,6 @@
 #[cfg(feature = "devnet-prealloc")]
 use super::utxo_set_override::{set_genesis_utxo_commitment_from_config, set_initial_utxo_set};
-use super::{Consensus, ctl::Ctl};
+use super::{ctl::Ctl, Consensus};
 use crate::{model::stores::U64Key, pipeline::ProcessingCounters};
 use itertools::Itertools;
 use kaspa_consensus_core::{api::ConsensusApi, config::Config, mining_rules::MiningRules};
@@ -9,8 +9,8 @@ use kaspa_consensusmanager::{ConsensusFactory, ConsensusInstance, DynConsensusCt
 use kaspa_core::{debug, time::unix_now, warn};
 use kaspa_database::{
     prelude::{
-        BatchDbWriter, CachePolicy, CachedDbAccess, CachedDbItem, DB, DirectDbWriter, RocksDbPreset, StoreError, StoreResult,
-        StoreResultExt,
+        BatchDbWriter, CachePolicy, CachedDbAccess, CachedDbItem, DirectDbWriter, RocksDbPreset, StoreError, StoreResult,
+        StoreResultExt, DB,
     },
     registry::DatabaseStorePrefixes,
 };

@@ -6,9 +6,9 @@ use crate::{
 
 use super::prelude::{DbKey, DbWriter};
 use parking_lot::RwLock;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    collections::{HashSet, hash_map::RandomState},
+    collections::{hash_map::RandomState, HashSet},
     hash::BuildHasher,
     sync::Arc,
 };

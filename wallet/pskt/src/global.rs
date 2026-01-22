@@ -6,7 +6,7 @@ use derive_builder::Builder;
 use kaspa_consensus_core::tx::TransactionId;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, btree_map},
+    collections::{btree_map, BTreeMap},
     ops::Add,
 };
 

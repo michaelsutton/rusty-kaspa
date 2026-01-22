@@ -7,9 +7,9 @@
 //!
 
 use crate::api::connection::DynRpcConnection;
-use crate::{RpcResult, model::*, notify::connection::ChannelConnection};
+use crate::{model::*, notify::connection::ChannelConnection, RpcResult};
 use async_trait::async_trait;
-use downcast::{AnySync, downcast_sync};
+use downcast::{downcast_sync, AnySync};
 use kaspa_notify::{listener::ListenerId, scope::Scope, subscription::Command};
 use std::sync::Arc;
 

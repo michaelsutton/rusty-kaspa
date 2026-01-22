@@ -4,7 +4,7 @@
 
 use crate::imports::*;
 use async_trait::async_trait;
-use downcast::{AnySync, downcast_sync};
+use downcast::{downcast_sync, AnySync};
 
 #[derive(Debug, Clone)]
 pub struct WalletExportOptions {

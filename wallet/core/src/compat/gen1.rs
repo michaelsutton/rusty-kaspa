@@ -1,5 +1,5 @@
 use crate::imports::*;
-use chacha20poly1305::{Key, KeyInit, aead::AeadMut};
+use chacha20poly1305::{aead::AeadMut, Key, KeyInit};
 
 pub fn decrypt_mnemonic<T: AsRef<[u8]>>(
     num_threads: u32,

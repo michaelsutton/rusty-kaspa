@@ -397,7 +397,11 @@ impl TransactionRecord {
             params.user_transaction_maturity_period_daa()
         };
 
-        if current_daa_score < self.block_daa_score() + maturity { Maturity::Pending } else { Maturity::Confirmed }
+        if current_daa_score < self.block_daa_score() + maturity {
+            Maturity::Pending
+        } else {
+            Maturity::Confirmed
+        }
     }
 
     pub fn kind(&self) -> TransactionKind {

@@ -9,7 +9,7 @@ use kaspa_core::{info, signals::Signals};
 use kaspa_utils::fd_budget;
 use kaspad_lib::{
     args::parse_args,
-    daemon::{DESIRED_DAEMON_SOFT_FD_LIMIT, MINIMUM_DAEMON_SOFT_FD_LIMIT, create_core},
+    daemon::{create_core, DESIRED_DAEMON_SOFT_FD_LIMIT, MINIMUM_DAEMON_SOFT_FD_LIMIT},
 };
 
 #[cfg(feature = "heap")]

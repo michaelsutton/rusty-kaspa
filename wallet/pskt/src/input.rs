@@ -1,10 +1,10 @@
 //! PSKT input structure.
 
 use crate::pskt::{KeySource, PartialSigs};
-use crate::utils::{Error as CombineMapErr, combine_if_no_conflicts};
+use crate::utils::{combine_if_no_conflicts, Error as CombineMapErr};
 use derive_builder::Builder;
 use kaspa_consensus_core::{
-    hashing::sighash_type::{SIG_HASH_ALL, SigHashType},
+    hashing::sighash_type::{SigHashType, SIG_HASH_ALL},
     tx::{TransactionId, TransactionOutpoint, UtxoEntry},
 };
 use serde::{Deserialize, Serialize};

@@ -1,10 +1,10 @@
 use kaspa_notify::{scope::Scope, subscription::Command};
 
 use crate::protowire::{
-    KaspadRequest, KaspadResponse, NotifyBlockAddedRequestMessage, NotifyFinalityConflictRequestMessage,
-    NotifyNewBlockTemplateRequestMessage, NotifyPruningPointUtxoSetOverrideRequestMessage, NotifySinkBlueScoreChangedRequestMessage,
-    NotifyUtxosChangedRequestMessage, NotifyVirtualChainChangedRequestMessage, NotifyVirtualDaaScoreChangedRequestMessage,
-    kaspad_request, kaspad_response,
+    kaspad_request, kaspad_response, KaspadRequest, KaspadResponse, NotifyBlockAddedRequestMessage,
+    NotifyFinalityConflictRequestMessage, NotifyNewBlockTemplateRequestMessage, NotifyPruningPointUtxoSetOverrideRequestMessage,
+    NotifySinkBlueScoreChangedRequestMessage, NotifyUtxosChangedRequestMessage, NotifyVirtualChainChangedRequestMessage,
+    NotifyVirtualDaaScoreChangedRequestMessage,
 };
 
 impl KaspadRequest {

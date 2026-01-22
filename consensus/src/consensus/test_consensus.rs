@@ -14,8 +14,8 @@ use kaspa_hashes::Hash;
 use kaspa_notify::subscription::context::SubscriptionContext;
 use parking_lot::RwLock;
 
-use super::Consensus;
 use super::services::{DbDagTraversalManager, DbGhostdagManager, DbWindowManager};
+use super::Consensus;
 use crate::pipeline::virtual_processor::test_block_builder::TestBlockBuilder;
 use crate::processes::window::WindowManager;
 use crate::{
@@ -25,11 +25,11 @@ use crate::{
     model::{
         services::reachability::MTReachabilityService,
         stores::{
-            DB, ghostdag::DbGhostdagStore, headers::HeaderStoreReader, reachability::DbReachabilityStore, virtual_state::VirtualStores,
+            ghostdag::DbGhostdagStore, headers::HeaderStoreReader, reachability::DbReachabilityStore, virtual_state::VirtualStores, DB,
         },
     },
     params::Params,
-    pipeline::{ProcessingCounters, body_processor::BlockBodyProcessor, virtual_processor::VirtualStateProcessor},
+    pipeline::{body_processor::BlockBodyProcessor, virtual_processor::VirtualStateProcessor, ProcessingCounters},
     test_helpers::header_from_precomputed_hash,
 };
 use kaspa_database::create_temp_db;

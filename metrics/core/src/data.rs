@@ -2,7 +2,7 @@ use crate::error::Error;
 use crate::result::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
 use kaspa_rpc_core::GetMetricsResponse;
-use separator::{Separatable, separated_float, separated_int, separated_uint_with_output};
+use separator::{separated_float, separated_int, separated_uint_with_output, Separatable};
 use serde::{Deserialize, Serialize};
 use workflow_core::enums::Describe;
 
@@ -887,5 +887,9 @@ pub fn format_as_float(f: f64, short: bool) -> String {
 
 /// Format supplied value as a float with 2 decimal places.
 fn format_with_precision(f: f64) -> String {
-    if f.fract() < 0.01 { separated_float!(format!("{}", f.trunc())) } else { separated_float!(format!("{:.2}", f)) }
+    if f.fract() < 0.01 {
+        separated_float!(format!("{}", f.trunc()))
+    } else {
+        separated_float!(format!("{:.2}", f))
+    }
 }

@@ -1,4 +1,4 @@
-use igd_next::{AddPortError, aio::tokio::Tokio};
+use igd_next::{aio::tokio::Tokio, AddPortError};
 use kaspa_core::{
     debug, error, info,
     task::{

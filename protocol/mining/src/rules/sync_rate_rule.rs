@@ -1,8 +1,8 @@
 use std::{
     collections::VecDeque,
     sync::{
-        Arc, RwLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc, RwLock,
     },
 };
 
@@ -11,7 +11,7 @@ use kaspa_core::{time::unix_now, trace, warn};
 
 use crate::rule_engine::SNAPSHOT_INTERVAL;
 
-use super::{ExtraData, mining_rule::MiningRule};
+use super::{mining_rule::MiningRule, ExtraData};
 
 // within a 5 minute period, we expect sync rate less sensitive to sudden changes
 // but we use a lower threshold anyway because we want the warns to be less frequent
@@ -116,14 +116,14 @@ impl MiningRule for SyncRateRule {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, atomic::AtomicBool};
+    use std::sync::{atomic::AtomicBool, Arc};
 
-    use crate::rules::{ExtraData, mining_rule::MiningRule, sync_rate_rule::SYNC_RATE_WINDOW_MAX_SIZE};
+    use crate::rules::{mining_rule::MiningRule, sync_rate_rule::SYNC_RATE_WINDOW_MAX_SIZE, ExtraData};
     use kaspa_consensus_core::api::counters::ProcessingCountersSnapshot;
     use kaspa_core::time::unix_now;
     use std::sync::atomic::*;
 
-    use super::{SYNC_RATE_WINDOW_MIN_THRESHOLD, SyncRateRule};
+    use super::{SyncRateRule, SYNC_RATE_WINDOW_MIN_THRESHOLD};
 
     fn create_rule() -> (Arc<AtomicBool>, SyncRateRule) {
         let use_sync_rate_rule = Arc::new(AtomicBool::new(false));

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 use std::hash::Hash;
 
 pub trait NestedHashMapExtensions<K, K2, V> {

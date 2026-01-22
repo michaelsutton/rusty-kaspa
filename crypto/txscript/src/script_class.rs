@@ -1,4 +1,4 @@
-use crate::{MAX_SCRIPT_PUBLIC_KEY_VERSION, opcodes};
+use crate::{opcodes, MAX_SCRIPT_PUBLIC_KEY_VERSION};
 use borsh::{BorshDeserialize, BorshSerialize};
 use kaspa_addresses::Version;
 use kaspa_consensus_core::tx::{ScriptPublicKey, ScriptPublicKeyVersion};

@@ -8,12 +8,12 @@ use crate::imports::*;
 use crate::storage::interface::{
     AddressBookStore, CreateArgs, OpenArgs, StorageDescriptor, StorageStream, WalletDescriptor, WalletExportOptions,
 };
-use crate::storage::local::Payload;
-use crate::storage::local::Storage;
 use crate::storage::local::cache::*;
 use crate::storage::local::streams::*;
 use crate::storage::local::transaction::*;
 use crate::storage::local::wallet::WalletStorage;
+use crate::storage::local::Payload;
+use crate::storage::local::Storage;
 use slugify_rs::slugify;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;

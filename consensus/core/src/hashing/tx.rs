@@ -111,7 +111,7 @@ mod tests {
     use super::*;
     use crate::{
         subnets::{self, SubnetworkId},
-        tx::{ScriptPublicKey, scriptvec},
+        tx::{scriptvec, ScriptPublicKey},
     };
     use std::str::FromStr;
 

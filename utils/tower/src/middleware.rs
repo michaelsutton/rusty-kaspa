@@ -5,10 +5,10 @@ use pin_project_lite::pin_project;
 use std::{
     pin::Pin,
     sync::{
-        Arc,
         atomic::{AtomicUsize, Ordering},
+        Arc,
     },
-    task::{Context, Poll, ready},
+    task::{ready, Context, Poll},
 };
 
 pub use http_body_util::BodyExt;

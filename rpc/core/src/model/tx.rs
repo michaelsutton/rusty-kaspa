@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use workflow_serializer::prelude::*;
 
 use crate::{
-    RpcOptionalHeader, RpcOptionalTransaction,
     prelude::{RpcHash, RpcScriptClass, RpcSubnetworkId},
+    RpcOptionalHeader, RpcOptionalTransaction,
 };
 
 /// Represents the ID of a Kaspa transaction

@@ -4,12 +4,12 @@ use kaspa_consensus_core::errors::consensus::ConsensusError;
 use kaspa_core::debug;
 use kaspa_hashes::Hash;
 use kaspa_p2p_lib::{
-    IncomingRoute, Router,
     common::ProtocolError,
     dequeue, make_message,
     pb::{
-        DonePruningPointUtxoSetChunksMessage, PruningPointUtxoSetChunkMessage, UnexpectedPruningPointMessage, kaspad_message::Payload,
+        kaspad_message::Payload, DonePruningPointUtxoSetChunksMessage, PruningPointUtxoSetChunkMessage, UnexpectedPruningPointMessage,
     },
+    IncomingRoute, Router,
 };
 use std::sync::Arc;
 

@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{task::JoinHandle, time::sleep};
-use workflow_perf_monitor::mem::{ProcessMemoryInfo, get_process_memory_info};
+use workflow_perf_monitor::mem::{get_process_memory_info, ProcessMemoryInfo};
 
 pub struct StatRecorderTask {
     tick: Duration,

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use kaspa_consensus_core::{
-    BlockHashMap, BlockLevel, BlueWorkType, HashMapCustomHasher,
     blockhash::{self, BlockHashExtensions, BlockHashes},
+    BlockHashMap, BlockLevel, BlueWorkType, HashMapCustomHasher,
 };
 use kaspa_hashes::Hash;
 use kaspa_utils::refs::Refs;

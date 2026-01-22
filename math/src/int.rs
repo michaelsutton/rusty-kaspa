@@ -107,7 +107,7 @@ impl<T: PartialOrd + PartialEq<u64>> PartialOrd for SignedInteger<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Uint192, int::SignedInteger};
+    use crate::{int::SignedInteger, Uint192};
 
     fn from_u64(val: u64) -> SignedInteger<Uint192> {
         SignedInteger::from(Uint192::from_u64(val))

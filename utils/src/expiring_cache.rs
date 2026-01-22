@@ -2,8 +2,8 @@ use arc_swap::ArcSwapOption;
 use std::{
     future::Future,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     time::{Duration, Instant},
 };

@@ -7,8 +7,8 @@ use kaspa_utils::{
     serde_bytes::FromHexVisitor,
 };
 use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 use smallvec::SmallVec;
 use std::{

@@ -715,7 +715,11 @@ impl UtxoContext {
             .iter()
             .filter_map(|address| {
                 let address = Arc::new(address.clone());
-                if local.insert(address.clone()) { Some(address) } else { None }
+                if local.insert(address.clone()) {
+                    Some(address)
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 

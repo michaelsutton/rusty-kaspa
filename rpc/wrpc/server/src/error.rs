@@ -2,7 +2,7 @@ use kaspa_notify::error::Error as NotifyError;
 use kaspa_rpc_core::RpcError;
 use std::sync::PoisonError;
 use thiserror::Error;
-use workflow_rpc::server::{WebSocketError, error::Error as RpcServerError};
+use workflow_rpc::server::{error::Error as RpcServerError, WebSocketError};
 
 #[derive(Debug, Error)]
 pub enum Error {

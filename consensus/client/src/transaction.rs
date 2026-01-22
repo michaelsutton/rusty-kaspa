@@ -9,7 +9,7 @@ use crate::input::{TransactionInput, TransactionInputArrayAsArgT, TransactionInp
 use crate::outpoint::TransactionOutpoint;
 use crate::output::{TransactionOutput, TransactionOutputArrayAsArgT, TransactionOutputArrayAsResultT};
 use crate::result::Result;
-use crate::serializable::{SerializableTransactionT, numeric, string};
+use crate::serializable::{numeric, string, SerializableTransactionT};
 use crate::utxo::{UtxoEntryId, UtxoEntryReference};
 use ahash::AHashMap;
 use kaspa_consensus_core::network::NetworkType;

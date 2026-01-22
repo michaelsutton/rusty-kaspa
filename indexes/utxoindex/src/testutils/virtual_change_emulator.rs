@@ -1,14 +1,14 @@
 use crate::model::{CirculatingSupply, CirculatingSupplyDiff};
 use kaspa_consensus::test_helpers::*;
 use kaspa_consensus_core::{
-    BlockHashSet, HashMapCustomHasher,
     tx::ScriptPublicKey,
     utxo::{utxo_collection::UtxoCollection, utxo_diff::UtxoDiff},
+    BlockHashSet, HashMapCustomHasher,
 };
 use kaspa_hashes::Hash;
 #[cfg(test)]
 use rand::Rng;
-use rand::{SeedableRng, rngs::SmallRng};
+use rand::{rngs::SmallRng, SeedableRng};
 use std::sync::Arc;
 
 pub struct VirtualChangeEmulator {

@@ -14,7 +14,6 @@ use crate::{
             relations::MTRelationsService,
         },
         stores::{
-            DB,
             acceptance_data::{AcceptanceDataStoreReader, DbAcceptanceDataStore},
             block_transactions::{BlockTransactionsStoreReader, DbBlockTransactionsStore},
             block_window_cache::{BlockWindowCacheStore, BlockWindowCacheWriter},
@@ -34,22 +33,22 @@ use crate::{
             utxo_diffs::{DbUtxoDiffsStore, UtxoDiffsStoreReader},
             utxo_multisets::{DbUtxoMultisetsStore, UtxoMultisetsStoreReader},
             virtual_state::{LkgVirtualState, VirtualState, VirtualStateStoreReader, VirtualStores},
+            DB,
         },
     },
     params::Params,
     pipeline::{
-        ProcessingCounters, deps_manager::VirtualStateProcessingMessage, pruning_processor::processor::PruningProcessingMessage,
-        virtual_processor::utxo_validation::UtxoProcessingContext,
+        deps_manager::VirtualStateProcessingMessage, pruning_processor::processor::PruningProcessingMessage,
+        virtual_processor::utxo_validation::UtxoProcessingContext, ProcessingCounters,
     },
     processes::{
         coinbase::CoinbaseManager,
         ghostdag::ordering::SortableBlock,
-        transaction_validator::{TransactionValidator, errors::TxResult, tx_validation_in_utxo_context::TxValidationFlags},
+        transaction_validator::{errors::TxResult, tx_validation_in_utxo_context::TxValidationFlags, TransactionValidator},
         window::WindowManager,
     },
 };
 use kaspa_consensus_core::{
-    BlockHashSet, ChainPath,
     acceptance_data::AcceptanceData,
     api::args::{TransactionValidationArgs, TransactionValidationBatchArgs},
     block::{BlockTemplate, MutableBlock, TemplateBuildMode, TemplateTransactionSelector},
@@ -65,6 +64,7 @@ use kaspa_consensus_core::{
         utxo_diff::UtxoDiff,
         utxo_view::{UtxoView, UtxoViewComposition},
     },
+    BlockHashSet, ChainPath,
 };
 use kaspa_consensus_notify::{
     notification::{
@@ -90,17 +90,17 @@ use itertools::Itertools;
 use kaspa_consensus_core::tx::ValidatedTransaction;
 use kaspa_utils::binary_heap::BinaryHeapExtensions;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use rand::{Rng, seq::SliceRandom};
+use rand::{seq::SliceRandom, Rng};
 use rayon::{
-    ThreadPool,
     prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
+    ThreadPool,
 };
 use rocksdb::WriteBatch;
 use std::{
     cmp::min,
     collections::{BinaryHeap, HashMap, VecDeque},
     ops::Deref,
-    sync::{Arc, atomic::Ordering},
+    sync::{atomic::Ordering, Arc},
 };
 
 pub struct VirtualStateProcessor {
@@ -1028,7 +1028,11 @@ impl VirtualStateProcessor {
                 invalid_transactions.insert(tx.id(), e);
             }
         }
-        if !invalid_transactions.is_empty() { Err(RuleError::InvalidTransactionsInNewBlock(invalid_transactions)) } else { Ok(()) }
+        if !invalid_transactions.is_empty() {
+            Err(RuleError::InvalidTransactionsInNewBlock(invalid_transactions))
+        } else {
+            Ok(())
+        }
     }
 
     pub(crate) fn build_block_template_from_virtual_state(

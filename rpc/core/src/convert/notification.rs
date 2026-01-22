@@ -1,9 +1,9 @@
 //! Conversion of Notification related types
 
 use crate::{
-    BlockAddedNotification, FinalityConflictNotification, FinalityConflictResolvedNotification, NewBlockTemplateNotification,
-    Notification, PruningPointUtxoSetOverrideNotification, RpcAcceptedTransactionIds, SinkBlueScoreChangedNotification,
-    UtxosChangedNotification, VirtualChainChangedNotification, VirtualDaaScoreChangedNotification, convert::utxo::utxo_set_into_rpc,
+    convert::utxo::utxo_set_into_rpc, BlockAddedNotification, FinalityConflictNotification, FinalityConflictResolvedNotification,
+    NewBlockTemplateNotification, Notification, PruningPointUtxoSetOverrideNotification, RpcAcceptedTransactionIds,
+    SinkBlueScoreChangedNotification, UtxosChangedNotification, VirtualChainChangedNotification, VirtualDaaScoreChangedNotification,
 };
 use kaspa_consensus_notify::notification as consensus_notify;
 use kaspa_index_core::notification as index_notify;

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use kaspa_database::{
-    prelude::{CachedDbItem, DB, DirectDbWriter, StoreResult},
+    prelude::{CachedDbItem, DirectDbWriter, StoreResult, DB},
     registry::DatabaseStorePrefixes,
 };
 

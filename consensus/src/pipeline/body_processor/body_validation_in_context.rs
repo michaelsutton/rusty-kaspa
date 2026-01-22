@@ -4,8 +4,8 @@ use crate::{
     model::stores::statuses::StatusesStoreReader,
     processes::{
         transaction_validator::{
-            TransactionValidator,
             tx_validation_in_header_context::{LockTimeArg, LockTimeType},
+            TransactionValidator,
         },
         window::WindowManager,
     },

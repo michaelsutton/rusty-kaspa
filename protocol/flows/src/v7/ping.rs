@@ -1,10 +1,10 @@
 use crate::{flow_context::FlowContext, flow_trait::Flow};
 use kaspa_core::{debug, task::tick::TickReason};
 use kaspa_p2p_lib::{
-    IncomingRoute, Router,
     common::ProtocolError,
     dequeue, dequeue_with_timeout, make_message,
-    pb::{PingMessage, PongMessage, kaspad_message::Payload},
+    pb::{kaspad_message::Payload, PingMessage, PongMessage},
+    IncomingRoute, Router,
 };
 use rand::Rng;
 use std::{

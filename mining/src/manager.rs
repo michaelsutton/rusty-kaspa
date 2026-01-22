@@ -1,17 +1,16 @@
 use crate::{
-    MempoolCountersSnapshot, MiningCounters, P2pTxCountSample,
     block_template::{builder::BlockTemplateBuilder, errors::BuilderError},
     cache::BlockTemplateCache,
     errors::MiningManagerResult,
     feerate::{FeeEstimateVerbose, FeerateEstimations, FeerateEstimatorArgs},
     mempool::{
-        Mempool,
         config::Config,
         model::tx::{MempoolTransaction, TransactionPostValidation, TransactionPreValidation, TxRemovalReason},
         populate_entries_and_try_validate::{
             populate_mempool_transactions_in_parallel, validate_mempool_transaction, validate_mempool_transactions_in_parallel,
         },
         tx::{Orphan, Priority, RbfPolicy},
+        Mempool,
     },
     model::{
         owner_txs::{GroupedOwnerTransactions, ScriptPublicKeySet},
@@ -19,19 +18,20 @@ use crate::{
         tx_insert::TransactionInsertion,
         tx_query::TransactionQuery,
     },
+    MempoolCountersSnapshot, MiningCounters, P2pTxCountSample,
 };
 use itertools::Itertools;
 use kaspa_consensus_core::{
     api::{
-        ConsensusApi,
         args::{TransactionValidationArgs, TransactionValidationBatchArgs},
+        ConsensusApi,
     },
     block::{BlockTemplate, TemplateBuildMode, TemplateTransactionSelector},
     coinbase::MinerData,
     errors::{block::RuleError as BlockRuleError, tx::TxRuleError},
     tx::{MutableTransaction, Transaction, TransactionId, TransactionOutput},
 };
-use kaspa_consensusmanager::{ConsensusProxy, spawn_blocking};
+use kaspa_consensusmanager::{spawn_blocking, ConsensusProxy};
 use kaspa_core::{debug, error, info, time::Stopwatch, warn};
 use kaspa_mining_errors::{manager::MiningManagerError, mempool::RuleError};
 use parking_lot::RwLock;

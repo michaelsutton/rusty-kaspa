@@ -13,7 +13,7 @@ use rand::thread_rng;
 use rand_distr::{Distribution, Exp};
 use std::{cmp::max, collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
-    sync::oneshot::{Receiver as OneshotReceiver, Sender as OneshotSender, channel as oneshot_channel},
+    sync::oneshot::{channel as oneshot_channel, Receiver as OneshotReceiver, Sender as OneshotSender},
     task::JoinHandle,
     time::sleep,
 };

@@ -1,5 +1,5 @@
 use kaspa_consensus_core::BlueWorkType;
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 use std::str;
 
 // TODO combine this with kaspa-utils::hex

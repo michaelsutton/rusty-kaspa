@@ -7,8 +7,8 @@ mod u3072;
 use crate::u3072::U3072;
 use kaspa_hashes::{Hash, Hasher, HasherBase, MuHashElementHash, MuHashFinalizeHash};
 use kaspa_math::Uint3072;
-use rand_chacha::ChaCha20Rng;
 use rand_chacha::rand_core::{RngCore, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Display;
@@ -110,7 +110,11 @@ impl MuHash {
     #[inline]
     pub fn deserialize(data: [u8; SERIALIZED_MUHASH_SIZE]) -> Result<Self, OverflowError> {
         let numerator = U3072::from_le_bytes(data);
-        if numerator.is_overflow() { Err(OverflowError) } else { Ok(Self { numerator, denominator: U3072::one() }) }
+        if numerator.is_overflow() {
+            Err(OverflowError)
+        } else {
+            Ok(Self { numerator, denominator: U3072::one() })
+        }
     }
 }
 
@@ -123,7 +127,11 @@ impl TryFrom<MuHash> for Uint3072 {
     type Error = MuHashError;
 
     fn try_from(value: MuHash) -> Result<Self, Self::Error> {
-        if value.denominator == U3072::one() { Ok(value.numerator.into()) } else { Err(MuHashError::NonNormalizedValue) }
+        if value.denominator == U3072::one() {
+            Ok(value.numerator.into())
+        } else {
+            Err(MuHashError::NonNormalizedValue)
+        }
     }
 }
 
@@ -178,7 +186,7 @@ impl Default for MuHash {
 #[cfg(test)]
 mod tests {
     use crate::OverflowError;
-    use crate::{EMPTY_MUHASH, MuHash, U3072};
+    use crate::{MuHash, EMPTY_MUHASH, U3072};
     use kaspa_hashes::Hash;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;

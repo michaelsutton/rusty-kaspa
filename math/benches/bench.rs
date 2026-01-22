@@ -1,11 +1,11 @@
 use criterion::measurement::WallTime;
-use criterion::{BenchmarkGroup, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkGroup, Criterion};
 use rand_chacha::{
-    ChaCha8Rng,
     rand_core::{RngCore, SeedableRng},
+    ChaCha8Rng,
 };
 
-use kaspa_math::{Uint3072, construct_uint};
+use kaspa_math::{construct_uint, Uint3072};
 construct_uint!(Uint128, 2);
 construct_uint!(Uint256, 4);
 

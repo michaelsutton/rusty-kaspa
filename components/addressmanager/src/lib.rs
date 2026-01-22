@@ -6,8 +6,8 @@ use std::{collections::HashSet, iter, net::SocketAddr, sync::Arc, time::Duration
 
 use address_manager::port_mapping_extender::Extender;
 use igd_next::{
-    self as igd, AddAnyPortError, AddPortError, Gateway, GetExternalIpError, GetGenericPortMappingEntryError, SearchError,
-    aio::tokio::Tokio,
+    self as igd, aio::tokio::Tokio, AddAnyPortError, AddPortError, Gateway, GetExternalIpError, GetGenericPortMappingEntryError,
+    SearchError,
 };
 use itertools::{
     Either::{Left, Right},
@@ -15,7 +15,7 @@ use itertools::{
 };
 use kaspa_consensus_core::config::Config;
 use kaspa_core::{debug, info, task::tick::TickService, time::unix_now, warn};
-use kaspa_database::prelude::{CachePolicy, DB, StoreResultExt};
+use kaspa_database::prelude::{CachePolicy, StoreResultExt, DB};
 use kaspa_utils::networking::IpAddress;
 use local_ip_address::list_afinet_netifas;
 use parking_lot::Mutex;
@@ -355,11 +355,11 @@ mod address_store_with_cache {
     };
 
     use crate::{
-        MAX_ADDRESSES, MAX_CONNECTION_FAILED_COUNT, NetAddress,
         stores::{
-            AddressKey,
             address_store::{AddressesStore, DbAddressesStore, Entry},
+            AddressKey,
         },
+        NetAddress, MAX_ADDRESSES, MAX_CONNECTION_FAILED_COUNT,
     };
 
     pub struct Store {
@@ -525,7 +525,7 @@ mod address_store_with_cache {
 
         use super::*;
         use address_manager::AddressManager;
-        use kaspa_consensus_core::config::{Config, params::SIMNET_PARAMS};
+        use kaspa_consensus_core::config::{params::SIMNET_PARAMS, Config};
         use kaspa_core::task::tick::TickService;
         use kaspa_database::create_temp_db;
         use kaspa_database::prelude::ConnBuilder;

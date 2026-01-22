@@ -1,8 +1,8 @@
-use crate::{ConnectionInitializer, Peer, Router, common::ProtocolError, pb::KaspadMessage};
+use crate::{common::ProtocolError, pb::KaspadMessage, ConnectionInitializer, Peer, Router};
 use kaspa_core::{debug, info, warn};
 use parking_lot::RwLock;
 use std::{
-    collections::{HashMap, hash_map::Entry::Occupied},
+    collections::{hash_map::Entry::Occupied, HashMap},
     sync::Arc,
 };
 use tokio::sync::mpsc::Receiver as MpscReceiver;

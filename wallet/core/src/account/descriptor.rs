@@ -199,7 +199,11 @@ impl AccountDescriptor {
 
     pub fn name_or_id(&self) -> String {
         if let Some(name) = self.name() {
-            if name.is_empty() { self.account_id().short() } else { name.clone() }
+            if name.is_empty() {
+                self.account_id().short()
+            } else {
+                name.clone()
+            }
         } else {
             self.account_id().short()
         }
@@ -207,7 +211,11 @@ impl AccountDescriptor {
 
     pub fn name_with_id(&self) -> String {
         if let Some(name) = self.name() {
-            if name.is_empty() { self.account_id().short() } else { format!("{name} {}", self.account_id().short()) }
+            if name.is_empty() {
+                self.account_id().short()
+            } else {
+                format!("{name} {}", self.account_id().short())
+            }
         } else {
             self.account_id().short()
         }

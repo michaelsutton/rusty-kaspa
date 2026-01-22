@@ -1,8 +1,8 @@
 use crate::{
     common::daemon::ClientManager,
     tasks::{
-        Stopper, Task,
         block::{miner::BlockMinerTask, submitter::BlockSubmitterTask, template_receiver::BlockTemplateReceiverTask},
+        Stopper, Task,
     },
 };
 use async_trait::async_trait;

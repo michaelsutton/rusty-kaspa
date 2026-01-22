@@ -6,9 +6,9 @@ use kaspa_consensusmanager::ConsensusProxy;
 use kaspa_core::{debug, warn};
 use kaspa_hashes::Hash;
 use kaspa_p2p_lib::{
-    common::{DEFAULT_TIMEOUT, ProtocolError},
+    common::{ProtocolError, DEFAULT_TIMEOUT},
     dequeue_with_timeout, make_message,
-    pb::{RequestIbdChainBlockLocatorMessage, kaspad_message::Payload},
+    pb::{kaspad_message::Payload, RequestIbdChainBlockLocatorMessage},
 };
 
 pub struct ChainNegotiationOutput {

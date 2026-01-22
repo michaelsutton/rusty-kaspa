@@ -1,8 +1,8 @@
 use super::coinbase_mock::CoinbaseManagerMock;
 use kaspa_consensus_core::{
     api::{
-        ConsensusApi,
         args::{TransactionValidationArgs, TransactionValidationBatchArgs},
+        ConsensusApi,
     },
     block::{BlockTemplate, MutableBlock, TemplateBuildMode, TemplateTransactionSelector, VirtualStateApproxId},
     coinbase::MinerData,
@@ -13,7 +13,7 @@ use kaspa_consensus_core::{
         tx::{TxResult, TxRuleError},
     },
     header::{CompressedParents, Header},
-    mass::{ContextualMasses, NonContextualMasses, transaction_estimated_serialized_size},
+    mass::{transaction_estimated_serialized_size, ContextualMasses, NonContextualMasses},
     merkle::calc_hash_merkle_root,
     tx::{MutableTransaction, Transaction, TransactionId, TransactionOutpoint, UtxoEntry},
     utxo::utxo_collection::UtxoCollection,

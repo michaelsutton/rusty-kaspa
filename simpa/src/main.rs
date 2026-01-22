@@ -1,6 +1,6 @@
 use async_channel::unbounded;
 use clap::Parser;
-use futures::{Future, future::try_join_all};
+use futures::{future::try_join_all, Future};
 use itertools::Itertools;
 use kaspa_alloc::init_allocator_with_default_settings;
 use kaspa_consensus::{
@@ -13,11 +13,11 @@ use kaspa_consensus::{
         headers::HeaderStoreReader,
         relations::RelationsStoreReader,
     },
-    params::{DEVNET_PARAMS, ForkActivation, NETWORK_DELAY_BOUND, OverrideParams, Params, SIMNET_PARAMS, TenBps},
+    params::{ForkActivation, OverrideParams, Params, TenBps, DEVNET_PARAMS, NETWORK_DELAY_BOUND, SIMNET_PARAMS},
 };
 use kaspa_consensus_core::{
-    BlockHashSet, BlockLevel, HashMapCustomHasher, api::ConsensusApi, block::Block, blockstatus::BlockStatus,
-    config::bps::calculate_ghostdag_k, errors::block::BlockProcessResult, mining_rules::MiningRules, tx::TransactionType,
+    api::ConsensusApi, block::Block, blockstatus::BlockStatus, config::bps::calculate_ghostdag_k, errors::block::BlockProcessResult,
+    mining_rules::MiningRules, tx::TransactionType, BlockHashSet, BlockLevel, HashMapCustomHasher,
 };
 use kaspa_consensus_notify::root::ConsensusNotificationRoot;
 use kaspa_core::{

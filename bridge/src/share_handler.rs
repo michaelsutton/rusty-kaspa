@@ -16,8 +16,8 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
@@ -46,7 +46,11 @@ fn vardiff_pow2_clamp_towards(current: f64, next: f64) -> f64 {
 
     let exp = if next >= current { next.log2().ceil() } else { next.log2().floor() };
     let clamped = 2_f64.powi(exp as i32);
-    if clamped < 1.0 { 1.0 } else { clamped }
+    if clamped < 1.0 {
+        1.0
+    } else {
+        clamped
+    }
 }
 
 fn vardiff_compute_next_diff(current: f64, shares: f64, elapsed_secs: f64, expected_spm: f64, clamp_pow2: bool) -> Option<f64> {
@@ -94,7 +98,11 @@ fn vardiff_compute_next_diff(current: f64, shares: f64, elapsed_secs: f64, expec
     if rel_change < 0.10 {
         return None;
     }
-    if (next - current).abs() > f64::EPSILON { Some(next) } else { None }
+    if (next - current).abs() > f64::EPSILON {
+        Some(next)
+    } else {
+        None
+    }
 }
 
 struct StatsPrinterEntry {
@@ -246,7 +254,11 @@ impl ShareHandler {
 
         let worker_id = {
             let worker_name = ctx.worker_name.lock();
-            if !worker_name.is_empty() { worker_name.clone() } else { ctx.remote_addr().to_string() }
+            if !worker_name.is_empty() {
+                worker_name.clone()
+            } else {
+                ctx.remote_addr().to_string()
+            }
         };
 
         if let Some(stats) = stats_map.get(&worker_id) {
@@ -431,7 +443,11 @@ impl ShareHandler {
 
         let worker_id = {
             let worker_name = ctx.worker_name.lock();
-            if !worker_name.is_empty() { worker_name.clone() } else { format!("{}:{}", ctx.remote_addr(), ctx.remote_port()) }
+            if !worker_name.is_empty() {
+                worker_name.clone()
+            } else {
+                format!("{}:{}", ctx.remote_addr(), ctx.remote_port())
+            }
         };
         let submit_key = format!("{}|{}|{}", worker_id, job_id, final_nonce_str);
 
@@ -601,7 +617,11 @@ impl ShareHandler {
                 let ratio = if !pow_value.is_zero() {
                     let target_f64 = network_target.to_f64().unwrap_or(0.0);
                     let pow_f64 = pow_value.to_f64().unwrap_or(1.0);
-                    if pow_f64 > 0.0 { (target_f64 / pow_f64) * 100.0 } else { 0.0 }
+                    if pow_f64 > 0.0 {
+                        (target_f64 / pow_f64) * 100.0
+                    } else {
+                        0.0
+                    }
                 } else {
                     0.0
                 };
@@ -1148,7 +1168,11 @@ impl ShareHandler {
         let instance_id = self.instance_id.clone();
         let inst_short = {
             let digits: String = instance_id.chars().filter(|c| c.is_ascii_digit()).collect();
-            if let Ok(n) = digits.parse::<u32>() { format!("Ins{:02}", n) } else { "Ins??".to_string() }
+            if let Ok(n) = digits.parse::<u32>() {
+                format!("Ins{:02}", n)
+            } else {
+                "Ins??".to_string()
+            }
         };
 
         {
@@ -1171,7 +1195,11 @@ impl ShareHandler {
 
         tokio::spawn(async move {
             fn trunc<'a>(s: &'a str, max: usize) -> Cow<'a, str> {
-                if s.len() <= max { Cow::Borrowed(s) } else { Cow::Owned(s.chars().take(max).collect()) }
+                if s.len() <= max {
+                    Cow::Borrowed(s)
+                } else {
+                    Cow::Owned(s.chars().take(max).collect())
+                }
             }
 
             fn format_uptime(d: Duration) -> String {

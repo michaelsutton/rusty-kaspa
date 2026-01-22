@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        MiningCounters,
         block_template::builder::BlockTemplateBuilder,
         errors::{MiningManagerError, MiningManagerResult},
         manager::MiningManager,
@@ -13,6 +12,7 @@ mod tests {
         },
         model::{tx_insert::TransactionInsertion, tx_query::TransactionQuery},
         testutils::consensus_mock::ConsensusMock,
+        MiningCounters,
     };
     use itertools::Itertools;
     use kaspa_addresses::{Address, Prefix, Version};
@@ -22,11 +22,11 @@ mod tests {
         coinbase::MinerData,
         constants::{MAX_TX_IN_SEQUENCE_NUM, SOMPI_PER_KASPA, TX_VERSION},
         errors::tx::TxRuleError,
-        mass::{NonContextualMasses, transaction_estimated_serialized_size},
+        mass::{transaction_estimated_serialized_size, NonContextualMasses},
         subnets::SUBNETWORK_ID_NATIVE,
         tx::{
-            MutableTransaction, ScriptPublicKey, Transaction, TransactionId, TransactionInput, TransactionOutpoint, TransactionOutput,
-            UtxoEntry, scriptvec,
+            scriptvec, MutableTransaction, ScriptPublicKey, Transaction, TransactionId, TransactionInput, TransactionOutpoint,
+            TransactionOutput, UtxoEntry,
         },
     };
     use kaspa_hashes::Hash;

@@ -1,4 +1,4 @@
-use crate::protowire::{KaspadRequest, KaspadResponse, kaspad_request};
+use crate::protowire::{kaspad_request, KaspadRequest, KaspadResponse};
 
 impl From<kaspad_request::Payload> for KaspadRequest {
     fn from(item: kaspad_request::Payload) -> Self {

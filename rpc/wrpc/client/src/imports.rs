@@ -26,8 +26,8 @@ pub use kaspa_rpc_core::{
 };
 pub use serde::{Deserialize, Serialize};
 pub use std::sync::{
-    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
 };
 pub use wasm_bindgen::prelude::*;
 pub use workflow_core::{

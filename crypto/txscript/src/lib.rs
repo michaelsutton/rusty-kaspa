@@ -16,17 +16,17 @@ pub mod runtime_sig_op_counter;
 
 use crate::caches::Cache;
 use crate::data_stack::{DataStack, Stack};
-use crate::opcodes::{OpCodeImplementation, deserialize_next_opcode};
+use crate::opcodes::{deserialize_next_opcode, OpCodeImplementation};
 use itertools::Itertools;
 use kaspa_consensus_core::hashing::sighash::{
-    SigHashReusedValues, SigHashReusedValuesUnsync, calc_ecdsa_signature_hash, calc_schnorr_signature_hash,
+    calc_ecdsa_signature_hash, calc_schnorr_signature_hash, SigHashReusedValues, SigHashReusedValuesUnsync,
 };
 use kaspa_consensus_core::hashing::sighash_type::SigHashType;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionInput, UtxoEntry, VerifiableTransaction};
 use kaspa_txscript_errors::TxScriptError;
 use log::trace;
 use opcodes::codes::OpReturn;
-use opcodes::{OpCond, codes, to_small_int};
+use opcodes::{codes, to_small_int, OpCond};
 use script_class::ScriptClass;
 
 pub mod prelude {

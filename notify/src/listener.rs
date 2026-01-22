@@ -5,14 +5,14 @@ use kaspa_core::debug;
 use crate::{
     error::Result,
     subscription::{
-        DynSubscription, MutateSingle, MutationOutcome, MutationPolicies, UtxosChangedMutationPolicy, context::SubscriptionContext,
+        context::SubscriptionContext, DynSubscription, MutateSingle, MutationOutcome, MutationPolicies, UtxosChangedMutationPolicy,
     },
 };
 
 use super::{
     connection::Connection,
     events::EventArray,
-    subscription::{Mutation, array::ArrayBuilder},
+    subscription::{array::ArrayBuilder, Mutation},
 };
 
 pub type ListenerId = u64;

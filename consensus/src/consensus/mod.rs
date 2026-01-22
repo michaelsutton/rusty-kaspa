@@ -14,7 +14,6 @@ use crate::{
     model::{
         services::reachability::ReachabilityService,
         stores::{
-            DB,
             acceptance_data::AcceptanceDataStoreReader,
             block_transactions::BlockTransactionsStoreReader,
             ghostdag::{GhostdagData, GhostdagStoreReader},
@@ -28,15 +27,16 @@ use crate::{
             tips::{TipsStore, TipsStoreReader},
             utxo_set::{UtxoSetStore, UtxoSetStoreReader},
             virtual_state::VirtualState,
+            DB,
         },
     },
     pipeline::{
-        ProcessingCounters,
         body_processor::BlockBodyProcessor,
         deps_manager::{BlockProcessingMessage, BlockResultSender, BlockTask, VirtualStateProcessingMessage},
         header_processor::HeaderProcessor,
         pruning_processor::processor::{PruningProcessingMessage, PruningProcessor},
-        virtual_processor::{VirtualStateProcessor, errors::PruningImportResult},
+        virtual_processor::{errors::PruningImportResult, VirtualStateProcessor},
+        ProcessingCounters,
     },
     processes::{
         ghostdag::ordering::SortableBlock,
@@ -44,12 +44,11 @@ use crate::{
     },
 };
 use kaspa_consensus_core::{
-    BlockHashSet, BlueWorkType, ChainPath, HashMapCustomHasher,
     acceptance_data::{AcceptanceData, MergesetBlockAcceptanceData},
     api::{
-        BlockValidationFutures, ConsensusApi, ConsensusStats,
         args::{TransactionValidationArgs, TransactionValidationBatchArgs},
         stats::BlockCount,
+        BlockValidationFutures, ConsensusApi, ConsensusStats,
     },
     block::{Block, BlockTemplate, TemplateBuildMode, TemplateTransactionSelector, VirtualStateApproxId},
     blockhash::BlockHashExtensions,
@@ -75,11 +74,12 @@ use kaspa_consensus_core::{
         MutableTransaction, Transaction, TransactionId, TransactionIndexType, TransactionOutpoint, TransactionQueryResult,
         TransactionType, UtxoEntry,
     },
+    BlockHashSet, BlueWorkType, ChainPath, HashMapCustomHasher,
 };
 use kaspa_consensus_notify::root::ConsensusNotificationRoot;
 
 use crossbeam_channel::{
-    Receiver as CrossbeamReceiver, Sender as CrossbeamSender, bounded as bounded_crossbeam, unbounded as unbounded_crossbeam,
+    bounded as bounded_crossbeam, unbounded as unbounded_crossbeam, Receiver as CrossbeamReceiver, Sender as CrossbeamSender,
 };
 use itertools::Itertools;
 use kaspa_consensusmanager::{SessionLock, SessionReadGuard};
@@ -101,8 +101,8 @@ use std::{
     iter::once,
     ops::Deref,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     thread::{self, JoinHandle},
 };
@@ -666,7 +666,11 @@ impl ConsensusApi for Consensus {
         let virtual_state = self.lkg_virtual_state.load();
         let virtual_ghostdag_data = &virtual_state.ghostdag_data;
         let root = self.services.depth_manager.calc_merge_depth_root(virtual_ghostdag_data, pruning_point);
-        if root.is_origin() { None } else { Some(root) }
+        if root.is_origin() {
+            None
+        } else {
+            Some(root)
+        }
     }
 
     fn get_virtual_merge_depth_blue_work_threshold(&self) -> BlueWorkType {
@@ -905,7 +909,11 @@ impl ConsensusApi for Consensus {
                                     .accepted_transactions
                                     .into_iter()
                                     .filter_map(|atx| {
-                                        if tx_ids_filter.contains(&atx.transaction_id) { Some(atx.index_within_block) } else { None }
+                                        if tx_ids_filter.contains(&atx.transaction_id) {
+                                            Some(atx.index_within_block)
+                                        } else {
+                                            None
+                                        }
                                     })
                                     .collect(),
                             ),
@@ -1295,7 +1303,11 @@ impl ConsensusApi for Consensus {
             .map_while(|hash| {
                 let entry = self.acceptance_data_store.get(hash).optional().unwrap().ok_or(ConsensusError::MissingData(hash));
                 num_of_merged_blocks += entry.as_ref().map_or(0, |entry| entry.len());
-                if num_of_merged_blocks > merged_blocks_limit { None } else { Some(entry) }
+                if num_of_merged_blocks > merged_blocks_limit {
+                    None
+                } else {
+                    Some(entry)
+                }
             })
             .collect::<ConsensusResult<Vec<_>>>()
     }

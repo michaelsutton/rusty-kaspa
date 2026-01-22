@@ -3,9 +3,9 @@ use crate::{cache::CachePolicy, db::DB, errors::StoreError};
 use super::prelude::{Cache, DbKey, DbWriter};
 use parking_lot::{RwLock, RwLockReadGuard};
 use rocksdb::{IterateBounds, IteratorMode, ReadOptions};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    collections::{HashSet, hash_map::RandomState},
+    collections::{hash_map::RandomState, HashSet},
     fmt::Debug,
     hash::BuildHasher,
     marker::PhantomData,

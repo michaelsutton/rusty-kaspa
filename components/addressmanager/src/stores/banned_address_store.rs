@@ -1,6 +1,6 @@
 use kaspa_database::{
     prelude::{CachePolicy, StoreError, StoreResult},
-    prelude::{CachedDbAccess, DB, DirectDbWriter},
+    prelude::{CachedDbAccess, DirectDbWriter, DB},
     registry::DatabaseStorePrefixes,
 };
 use kaspa_utils::mem_size::MemSizeEstimator;

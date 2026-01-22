@@ -4,16 +4,16 @@ use super::consts::{
 use log::LevelFilter;
 use log4rs::{
     append::{
-        Append,
         console::ConsoleAppender,
         rolling_file::{
+            policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy},
             RollingFileAppender,
-            policy::compound::{CompoundPolicy, roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger},
         },
+        Append,
     },
     config::Appender,
-    encode::{Color, Encode, Style, Write, pattern::PatternEncoder},
-    filter::{Filter, threshold::ThresholdFilter},
+    encode::{pattern::PatternEncoder, Color, Encode, Style, Write},
+    filter::{threshold::ThresholdFilter, Filter},
 };
 use std::path::PathBuf;
 

@@ -3,8 +3,9 @@ use itertools::Itertools;
 use kaspa_consensus_core::tx::TransactionId;
 use kaspa_core::debug;
 use kaspa_p2p_lib::{
-    Hub, make_message,
-    pb::{InvTransactionsMessage, KaspadMessage, kaspad_message::Payload},
+    make_message,
+    pb::{kaspad_message::Payload, InvTransactionsMessage, KaspadMessage},
+    Hub,
 };
 use std::time::{Duration, Instant};
 

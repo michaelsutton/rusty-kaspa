@@ -51,7 +51,11 @@ where
             sorted.push(current);
         }
 
-        if sorted.len() != self.topology_nodes().len() { Err(TopologicalIndexError::HasCycle) } else { Ok(sorted) }
+        if sorted.len() != self.topology_nodes().len() {
+            Err(TopologicalIndexError::HasCycle)
+        } else {
+            Ok(sorted)
+        }
     }
 
     /// Returns a topologically ordered index of the node keys.

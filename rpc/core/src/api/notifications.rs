@@ -6,11 +6,11 @@ use crate::model::message::*;
 use derive_more::Display;
 use kaspa_notify::{
     events::EventType,
-    notification::{Notification as NotificationTrait, full_featured},
+    notification::{full_featured, Notification as NotificationTrait},
     subscription::{
-        Subscription,
         context::SubscriptionContext,
         single::{OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
+        Subscription,
     },
 };
 use serde::{Deserialize, Serialize};

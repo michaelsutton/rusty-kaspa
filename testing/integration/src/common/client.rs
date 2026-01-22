@@ -3,7 +3,7 @@ use kaspa_grpc_client::GrpcClient;
 use kaspa_notify::{events::EventType, scope::Scope, subscription::Command};
 use kaspa_rpc_core::RpcResult;
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::{hash_map::Entry, HashMap},
     ops::Deref,
 };
 

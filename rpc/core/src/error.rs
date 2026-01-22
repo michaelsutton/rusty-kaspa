@@ -11,7 +11,7 @@ use std::{net::AddrParseError, num::TryFromIntError};
 use thiserror::Error;
 use workflow_core::channel::ChannelError;
 
-use crate::{RpcHash, RpcTransactionId, SubmitBlockRejectReason, api::ctl::RpcState};
+use crate::{api::ctl::RpcState, RpcHash, RpcTransactionId, SubmitBlockRejectReason};
 
 #[derive(Clone, Debug, Error)]
 pub enum RpcError {

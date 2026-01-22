@@ -1,7 +1,7 @@
 use crate::{
     events::EVENT_TYPE_ARRAY,
     listener::ListenerLifespan,
-    subscription::{MutationPolicies, UtxosChangedMutationPolicy, context::SubscriptionContext},
+    subscription::{context::SubscriptionContext, MutationPolicies, UtxosChangedMutationPolicy},
 };
 
 use super::{
@@ -14,7 +14,7 @@ use super::{
     notification::Notification,
     scope::Scope,
     subscriber::{Subscriber, SubscriptionManager},
-    subscription::{Command, CompoundedSubscription, Mutation, array::ArrayBuilder},
+    subscription::{array::ArrayBuilder, Command, CompoundedSubscription, Mutation},
 };
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -24,10 +24,10 @@ use itertools::Itertools;
 use kaspa_core::{debug, trace};
 use parking_lot::Mutex;
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::{hash_map::Entry, HashMap},
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
 };
 use workflow_core::channel::Channel;
@@ -830,7 +830,7 @@ mod tests {
         notification::test_helpers::*,
         subscriber::test_helpers::{SubscriptionManagerMock, SubscriptionMessage},
     };
-    use async_channel::{Receiver, Sender, unbounded};
+    use async_channel::{unbounded, Receiver, Sender};
     use tokio::time::timeout;
 
     const SUBSCRIPTION_MANAGER_ID: u64 = 0;

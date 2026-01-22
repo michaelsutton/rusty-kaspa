@@ -9,14 +9,14 @@ use kaspa_consensus_core::{
 };
 use kaspa_core::{debug, info};
 use kaspa_p2p_lib::{
-    IncomingRoute, Router,
-    common::{DEFAULT_TIMEOUT, ProtocolError},
+    common::{ProtocolError, DEFAULT_TIMEOUT},
     convert::{header::HeaderFormat, header::Versioned, model::trusted::TrustedDataEntry},
     make_message,
     pb::{
-        RequestNextHeadersMessage, RequestNextPruningPointAndItsAnticoneBlocksMessage, RequestNextPruningPointUtxoSetChunkMessage,
-        kaspad_message::Payload,
+        kaspad_message::Payload, RequestNextHeadersMessage, RequestNextPruningPointAndItsAnticoneBlocksMessage,
+        RequestNextPruningPointUtxoSetChunkMessage,
     },
+    IncomingRoute, Router,
 };
 use std::sync::Arc;
 use tokio::time::timeout;

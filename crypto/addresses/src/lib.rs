@@ -641,7 +641,7 @@ mod tests {
     #[cfg(target_arch = "wasm32")]
     use js_sys::Object;
     #[cfg(target_arch = "wasm32")]
-    use wasm_bindgen::{__rt::IntoJsResult, JsValue};
+    use wasm_bindgen::{JsValue, __rt::IntoJsResult};
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
     #[cfg(target_arch = "wasm32")]

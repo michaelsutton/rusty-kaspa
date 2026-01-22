@@ -7,7 +7,7 @@ use core::iter::once;
 use itertools::Itertools;
 use kaspa_consensus_core::{
     hashing::{
-        sighash::{SigHashReusedValuesUnsync, calc_schnorr_signature_hash},
+        sighash::{calc_schnorr_signature_hash, SigHashReusedValuesUnsync},
         sighash_type::SIG_HASH_ALL,
     },
     tx::PopulatedTransaction,
@@ -71,5 +71,9 @@ pub fn sign_with_multiple_v3<'a>(tx: &'a Transaction, privkeys: &[[u8; 32]]) -> 
             }
         }
     }
-    if additional_signatures_required { Ok(Signed::Partially(tx)) } else { Ok(Signed::Fully(tx)) }
+    if additional_signatures_required {
+        Ok(Signed::Partially(tx))
+    } else {
+        Ok(Signed::Fully(tx))
+    }
 }

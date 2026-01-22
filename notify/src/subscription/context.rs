@@ -2,8 +2,8 @@ use crate::{
     address::tracker::Tracker,
     listener::ListenerId,
     subscription::{
-        DynSubscription,
         single::{UtxosChangedState, UtxosChangedSubscription},
+        DynSubscription,
     },
 };
 use std::{ops::Deref, sync::Arc};

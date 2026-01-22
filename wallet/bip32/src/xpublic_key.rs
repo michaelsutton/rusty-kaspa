@@ -1,13 +1,13 @@
 //! Extended public keys
 //!
 use crate::{
-    ChildNumber, DerivationPath, Error, ExtendedKey, ExtendedKeyAttrs, ExtendedPrivateKey, KEY_SIZE, KeyFingerprint, Prefix,
-    PrivateKey, PublicKey, PublicKeyBytes, Result, types::*,
+    types::*, ChildNumber, DerivationPath, Error, ExtendedKey, ExtendedKeyAttrs, ExtendedPrivateKey, KeyFingerprint, Prefix,
+    PrivateKey, PublicKey, PublicKeyBytes, Result, KEY_SIZE,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::str::FromStr;
 use hmac::Mac;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
 ///// Extended public secp256k1 ECDSA verification key.

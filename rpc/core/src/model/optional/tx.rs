@@ -9,8 +9,8 @@ use serde_nested_with::serde_nested;
 use workflow_serializer::prelude::*;
 
 use crate::{
-    RpcError, RpcResult, RpcScriptPublicKey, RpcTransactionId,
     prelude::{RpcHash, RpcScriptClass, RpcSubnetworkId},
+    RpcError, RpcResult, RpcScriptPublicKey, RpcTransactionId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]

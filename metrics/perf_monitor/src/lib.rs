@@ -7,10 +7,10 @@ use kaspa_core::{
     trace, warn,
 };
 use workflow_perf_monitor::{
-    cpu::{ProcessStat, processor_numbers},
+    cpu::{processor_numbers, ProcessStat},
     fd::fd_count_cur,
-    io::{IOStats, get_process_io_stats},
-    mem::{ProcessMemoryInfo, get_process_memory_info},
+    io::{get_process_io_stats, IOStats},
+    mem::{get_process_memory_info, ProcessMemoryInfo},
 };
 
 use std::{sync::Arc, time::Duration, time::Instant};

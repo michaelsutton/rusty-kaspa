@@ -5,7 +5,7 @@ use kaspa_consensus_core::{
     coinbase::MinerData,
     tx::COINBASE_TRANSACTION_INDEX,
 };
-use kaspa_core::time::{Stopwatch, unix_now};
+use kaspa_core::time::{unix_now, Stopwatch};
 
 pub(crate) struct BlockTemplateBuilder {}
 

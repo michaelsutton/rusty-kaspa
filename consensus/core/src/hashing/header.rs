@@ -37,7 +37,7 @@ pub fn hash(header: &Header) -> Hash {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BlueWorkType, blockhash};
+    use crate::{blockhash, BlueWorkType};
 
     #[test]
     fn test_header_hashing() {

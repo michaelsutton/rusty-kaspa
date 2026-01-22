@@ -11,17 +11,17 @@ use futures_util::future::{join_all, try_join_all};
 use itertools::Itertools;
 use kaspa_addressmanager::{AddressManager, NetAddress};
 use kaspa_core::{debug, info, warn};
-use kaspa_p2p_lib::{ConnectionError, Peer, common::ProtocolError};
+use kaspa_p2p_lib::{common::ProtocolError, ConnectionError, Peer};
 use kaspa_utils::triggers::SingleTrigger;
 use parking_lot::Mutex as ParkingLotMutex;
 use rand::{seq::SliceRandom, thread_rng};
 use tokio::{
     select,
     sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         Mutex as TokioMutex,
-        mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     },
-    time::{MissedTickBehavior, interval},
+    time::{interval, MissedTickBehavior},
 };
 
 pub struct ConnectionManager {
