@@ -667,6 +667,9 @@ pub const TESTNET12_PARAMS: Params = Params {
     net: NetworkId::with_suffix(NetworkType::Testnet, 12),
     genesis: TESTNET12_GENESIS,
 
+    // Enable stark proofs
+    max_signature_script_len: 300_000,
+
     deflationary_phase_daa_score: TenBps::deflationary_phase_daa_score(),
     pre_deflationary_phase_base_subsidy: TenBps::pre_deflationary_phase_base_subsidy(),
     pre_crescendo_target_time_per_block: TenBps::target_time_per_block(),
@@ -694,14 +697,16 @@ pub const SIMNET_PARAMS: Params = Params {
 
     max_tx_inputs: 1000,
     max_tx_outputs: 1000,
-    max_signature_script_len: 10_000,
+
+    // Enable stark proofs
+    max_signature_script_len: 300_000,
     max_script_public_key_len: 10_000,
 
     mass_per_tx_byte: 1,
     mass_per_script_pub_key_byte: 10,
     mass_per_sig_op: 1000,
     // Increased for testing stark proofs
-    max_block_mass: 1_500_000,
+    max_block_mass: 1_000_000,
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
 
