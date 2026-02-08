@@ -663,7 +663,7 @@ pub const TESTNET_PARAMS: Params = Params {
 pub const TESTNET12_PARAMS: Params = Params {
     dns_seeders: &[
         // This DNS seeder is run by someone235
-        "tn12-dnsseed.kas.pa",
+        // "tn12-dnsseed.kas.pa",
     ],
     net: NetworkId::with_suffix(NetworkType::Testnet, 12),
     genesis: TESTNET12_GENESIS,
@@ -680,6 +680,24 @@ pub const TESTNET12_PARAMS: Params = Params {
 
     crescendo_activation: ForkActivation::always(),
     covenants_activation: ForkActivation::always(),
+
+    blockrate: BlockrateParams {
+        target_time_per_block: 100,
+        ghostdag_k: 124,
+        past_median_time_sample_rate: 100,
+        difficulty_sample_rate: 40,
+        max_block_parents: 16,
+        mergeset_size_limit: 32,
+        merge_depth: 6_000,
+        finality_depth: 12_000,
+        pruning_depth: 36_000,
+        coinbase_maturity: 1_000,
+    },
+
+    past_median_time_window_size: 13,
+    difficulty_window_size: 201,
+    min_difficulty_window_size: 10,
+
     ..TESTNET_PARAMS
 };
 
