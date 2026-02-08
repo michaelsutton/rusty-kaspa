@@ -244,7 +244,7 @@ impl NetworkId {
             NetworkType::Mainnet => 16111,
             NetworkType::Testnet => match self.suffix {
                 Some(10) => 16211,
-                Some(12) => 16311,
+                Some(12) => 16770,
                 None | Some(_) => 16411,
             },
             NetworkType::Simnet => 16511,
