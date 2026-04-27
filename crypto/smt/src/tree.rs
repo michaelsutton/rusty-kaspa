@@ -324,6 +324,12 @@ fn expand_singleton(existing: Option<Node>, updates: SortedLeafUpdatesRef) -> (O
     match existing {
         Some(Node::Collapsed(cl)) => match updates.binary_search_by_key(&cl.lane_key) {
             Err(at) => {
+                std::eprintln!(
+                    "[smt-debug] expand_singleton: existing_collapsed={} inserted into updates_len={} at={}",
+                    cl.lane_key,
+                    updates.len(),
+                    at
+                );
                 let mut expanded = Vec::with_capacity(updates.len() + 1);
                 expanded.extend_from_slice(&updates.as_slice()[..at]);
                 expanded.push(LeafUpdate { key: cl.lane_key, leaf_hash: cl.leaf_hash });

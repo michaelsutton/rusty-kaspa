@@ -332,6 +332,10 @@ impl BlockLaneChanges {
         use crate::keys::ScoreIndexKind;
         let updated: Vec<LaneKey> = self.changes.iter().filter_map(|(k, v)| v.as_ref().map(|_| *k)).collect();
         let expired: Vec<LaneKey> = self.changes.iter().filter_map(|(k, v)| if v.is_none() { Some(*k) } else { None }).collect();
+        eprintln!(
+            "[smt-debug] flush_score_index: bs={} block={} updated={:?} expired={:?}",
+            self.blue_score, block_hash, updated, expired
+        );
         if !updated.is_empty() {
             stores.score_index.put(BatchDbWriter::new(batch), self.blue_score, ScoreIndexKind::LeafUpdate, block_hash, &updated)?;
         }
@@ -423,6 +427,12 @@ impl SmtBuild {
         let root = self.root;
 
         for (bk, node) in &self.node_changes {
+            if let Some(Node::Collapsed(cl)) = node {
+                eprintln!(
+                    "[smt-debug] flush branch collapsed: bs={} block={} depth={} node_key={} lane={}",
+                    branch_blue_score, block_hash, bk.depth, bk.node_key, cl.lane_key
+                );
+            }
             stores.branch_version.put(BatchDbWriter::new(batch), bk.depth, bk.node_key, branch_blue_score, block_hash, *node)?;
         }
         {
