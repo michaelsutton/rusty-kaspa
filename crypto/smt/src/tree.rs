@@ -252,7 +252,7 @@ pub fn compute_root_update_into<H: SmtHasher, S: SmtStore>(
         return Ok(current_root);
     }
 
-    let result = compute_subtree::<H, S>(store, changes, leaf_updates.as_ref(), 0)?;
+    let result = compute_subtree::<H, S>(store, changes, leaf_updates.as_ref(), 0, false)?;
 
     // Convert the root-level NodeResult to a root hash
     match &result {
@@ -324,12 +324,6 @@ fn expand_singleton(existing: Option<Node>, updates: SortedLeafUpdatesRef) -> (O
     match existing {
         Some(Node::Collapsed(cl)) => match updates.binary_search_by_key(&cl.lane_key) {
             Err(at) => {
-                std::eprintln!(
-                    "[smt-debug] expand_singleton: existing_collapsed={} inserted into updates_len={} at={}",
-                    cl.lane_key,
-                    updates.len(),
-                    at
-                );
                 let mut expanded = Vec::with_capacity(updates.len() + 1);
                 expanded.extend_from_slice(&updates.as_slice()[..at]);
                 expanded.push(LeafUpdate { key: cl.lane_key, leaf_hash: cl.leaf_hash });
@@ -346,16 +340,19 @@ fn expand_singleton(existing: Option<Node>, updates: SortedLeafUpdatesRef) -> (O
 ///
 /// `updates` must be sorted by key and non-empty.
 /// `depth` is the current tree depth (0 = root, 255 = leaf parent).
+/// `ancestor_empty` means an ancestor was already known to be empty in the
+/// current tree view, so stale descendants in a versioned store must be ignored.
 fn compute_subtree<H: SmtHasher, S: SmtStore>(
     store: &S,
     changes: &mut SmtNodeChanges,
     updates: SortedLeafUpdatesRef<'_>,
     depth: usize,
+    ancestor_empty: bool,
 ) -> Result<NodeResult, S::Error> {
     debug_assert!(!updates.is_empty());
     let subtree_key = BranchKey::new(depth as u8, &updates.first().unwrap().key);
 
-    let existing = read_node::<S>(store, changes, &subtree_key)?;
+    let existing = if ancestor_empty { None } else { read_node::<S>(store, changes, &subtree_key)? };
 
     if let Some(u) = updates.single()
         && existing.is_none()
@@ -382,6 +379,9 @@ fn compute_subtree<H: SmtHasher, S: SmtStore>(
     }
 
     let (existing_for_write, updates) = expand_singleton(existing, updates);
+    // Once the current node is empty after applying singleton expansion,
+    // descendants from the backing store are outside the current preimage.
+    let children_are_empty = existing_for_write.is_none();
 
     // Leaf-parent level: resolve directly from updates, no child nodes.
     // This early return guards `child_branch_key` and `read_sibling_result`
@@ -398,15 +398,15 @@ fn compute_subtree<H: SmtHasher, S: SmtStore>(
     let (left_updates, right_updates) = updates.partition_by_bit(depth);
 
     let left_result = if left_updates.is_empty() {
-        read_sibling_result::<S>(store, changes, &subtree_key, false, depth)?
+        if children_are_empty { NodeResult::Empty } else { read_sibling_result::<S>(store, changes, &subtree_key, false, depth)? }
     } else {
-        compute_subtree::<H, S>(store, changes, left_updates, depth + 1)?
+        compute_subtree::<H, S>(store, changes, left_updates, depth + 1, children_are_empty)?
     };
 
     let right_result = if right_updates.is_empty() {
-        read_sibling_result::<S>(store, changes, &subtree_key, true, depth)?
+        if children_are_empty { NodeResult::Empty } else { read_sibling_result::<S>(store, changes, &subtree_key, true, depth)? }
     } else {
-        compute_subtree::<H, S>(store, changes, right_updates, depth + 1)?
+        compute_subtree::<H, S>(store, changes, right_updates, depth + 1, children_are_empty)?
     };
 
     let (result, new_node) = merged_node::<H>(&left_result, &right_result, depth);
@@ -541,6 +541,31 @@ mod tests {
         assert_ne!(root2, root1);
         // SLO: changes should be compact (collapsed nodes + internal at divergence)
         assert!(!changes2.is_empty());
+    }
+
+    #[test]
+    fn test_compute_root_update_ignores_descendants_below_empty_ancestor() {
+        let ghost = key_from_bytes([0x00; 32]);
+        let ghost_leaf = test_leaf(b"ghost");
+        let k1 = key_from_bytes([0x80; 32]);
+        let k2 = key_from_bytes([0xC0; 32]);
+        let l1 = test_leaf(b"1");
+        let l2 = test_leaf(b"2");
+
+        // Simulate a versioned store: an old descendant row may still exist
+        // even though the current ancestor view is empty. Rebuilding the empty
+        // ancestor must not read that descendant and resurrect `ghost`.
+        let mut stale_store = BTreeSmtStore::new();
+        stale_store
+            .insert_node(BranchKey::new(1, &ghost), Some(Node::Collapsed(CollapsedLeaf { lane_key: ghost, leaf_hash: ghost_leaf })));
+
+        let fresh_store = BTreeSmtStore::new();
+        let empty_root = TestHasher::empty_root();
+        let update_set = updates([(k1, l1), (k2, l2)]);
+        let (root, _) = compute_root_update::<TestHasher, _>(&stale_store, empty_root, update_set).unwrap();
+        let (expected, _) = compute_root_update::<TestHasher, _>(&fresh_store, empty_root, updates([(k1, l1), (k2, l2)])).unwrap();
+
+        assert_eq!(root, expected);
     }
 
     #[test]
