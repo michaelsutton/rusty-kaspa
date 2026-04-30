@@ -22,9 +22,9 @@ pub struct ScoreIndexValueOwned {
 /// Records lane changes per block, keyed by `(rev_blue_score, kind, block_hash)`.
 /// Each block may produce two entries:
 /// - `LeafUpdate` — lanes inserted or updated (score = lane's blue_score)
-/// - `Structural` — lanes expired by this block (score = block's blue_score),
-///   recorded only so pruning can delete the branch_version entries on those
-///   lanes' paths; expired lane_keys do not reappear in `LeafUpdate`.
+/// - `Structural` — branch-only pruning representatives (score = block's
+///   blue_score), recorded so pruning can delete branch_version entries not
+///   discoverable from `LeafUpdate`.
 ///
 /// These are **historical records** of what happened at a given score,
 /// not a reflection of current lane state.
