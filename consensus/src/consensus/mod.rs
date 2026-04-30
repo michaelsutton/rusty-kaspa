@@ -88,7 +88,7 @@ use kaspa_core::info;
 use kaspa_database::prelude::{StoreResult, StoreResultExt};
 use kaspa_hashes::Hash;
 use kaspa_muhash::MuHash;
-use kaspa_smt_store::processor::SmtReadBounds;
+use kaspa_smt_store::processor::{SmtReadBounds, StaleSmtEntriesCount};
 use kaspa_txscript::caches::TxScriptCacheCounters;
 use kaspa_utils::arc::ArcExtensions;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -623,8 +623,8 @@ impl Consensus {
         Ok(())
     }
 
-    pub fn verify_no_stale_smt_entries(&self, cutoff_blue_score: u64) -> StoreResult<()> {
-        self.storage.smt_stores.assert_no_entries_at_or_below(cutoff_blue_score)
+    pub fn count_stale_smt_entries(&self, cutoff_blue_score: u64) -> StoreResult<StaleSmtEntriesCount> {
+        self.storage.smt_stores.count_entries_at_or_below(cutoff_blue_score)
     }
 }
 

@@ -81,9 +81,19 @@ fn assert_pruning_point_smt_roundtrip(seed: u64) {
     let (imported_root, imported_lanes) =
         import_exported_pruning_point_smt(&*consensus, pp, metadata.lanes_root, metadata.active_lanes_count);
     let smt_cutoff = pp_header.blue_score.saturating_sub(FINALITY_DEPTH).saturating_sub(1);
-    consensus
-        .verify_no_stale_smt_entries(smt_cutoff)
-        .unwrap_or_else(|e| panic!("seed {seed}: stale SMT entry remained at or below cutoff {smt_cutoff}: {e}"));
+    let stale = consensus
+        .count_stale_smt_entries(smt_cutoff)
+        .unwrap_or_else(|e| panic!("seed {seed}: failed to count stale SMT entries at or below cutoff {smt_cutoff}: {e}"));
+    if stale.total() > 0 {
+        panic!(
+            "seed {seed}: stale SMT entries remained at or below cutoff {smt_cutoff}: \
+             branch_versions={}, lane_versions={}, score_index={}, total={}",
+            stale.branch_versions,
+            stale.lane_versions,
+            stale.score_index,
+            stale.total()
+        );
+    }
     let metadata_lanes = metadata.active_lanes_count;
     let metadata_root = metadata.lanes_root;
 
