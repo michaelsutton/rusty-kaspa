@@ -439,10 +439,12 @@ impl BlockLaneChanges {
         batch: &mut WriteBatch,
         block_hash: BlockHash,
         max_depth: u8,
+        structural_keys: impl IntoIterator<Item = LaneKey>,
     ) -> StoreResult<()> {
         use crate::keys::ScoreIndexKind;
         let updated: Vec<LaneKey> = self.changes.iter().filter_map(|(k, v)| v.as_ref().map(|_| *k)).collect();
-        let expired: Vec<LaneKey> = self.changes.iter().filter_map(|(k, v)| if v.is_none() { Some(*k) } else { None }).collect();
+        let structural: BTreeSet<LaneKey> =
+            self.changes.iter().filter_map(|(k, v)| if v.is_none() { Some(*k) } else { None }).chain(structural_keys).collect();
         if !updated.is_empty() {
             stores.score_index.put(
                 BatchDbWriter::new(batch),
@@ -453,13 +455,14 @@ impl BlockLaneChanges {
                 max_depth,
             )?;
         }
-        if !expired.is_empty() {
+        if !structural.is_empty() {
+            let structural: Vec<LaneKey> = structural.into_iter().collect();
             stores.score_index.put(
                 BatchDbWriter::new(batch),
                 self.blue_score,
                 ScoreIndexKind::Structural,
                 block_hash,
-                &expired,
+                &structural,
                 max_depth,
             )?;
         }
@@ -566,7 +569,12 @@ impl SmtBuild {
         }
 
         self.lane_changes.flush_lanes(stores, batch, block_hash)?;
-        self.lane_changes.flush_score_index(stores, batch, block_hash, max_depth)?;
+        // The SMT diff records branch-only representatives for writes not
+        // covered by direct lane updates, e.g. SLO promotion tombstones under
+        // an untouched sibling. Pruning uses these to reconstruct branch
+        // deletes without redundant structural entries for covered branches.
+        let structural_keys = self.node_changes.structural_node_keys().copied();
+        self.lane_changes.flush_score_index(stores, batch, block_hash, max_depth, structural_keys)?;
 
         Ok(root)
     }

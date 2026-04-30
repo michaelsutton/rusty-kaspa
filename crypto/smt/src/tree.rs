@@ -10,10 +10,11 @@
 //!   Single-leaf subtrees are collapsed into one node instead of 256 branches.
 //!   Used by consensus (`SmtProcessor::build`).
 
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
 use core::marker::PhantomData;
+use core::ops::{Deref, DerefMut};
 use kaspa_hashes::Hash;
 
 use crate::proof::{OwnedSmtProof, ProofTerminal};
@@ -190,10 +191,59 @@ impl<H: SmtHasher> SparseMerkleTree<H, BTreeSmtStore> {
     }
 }
 
-/// Map of changed nodes: `BranchKey → Option<Node>`.
+/// Node changes plus structural representatives needed for pruning.
 ///
-/// `None` means "this node was deleted".
-pub type SmtNodeChanges = BTreeMap<BranchKey, Option<Node>>;
+/// `nodes` maps `BranchKey → Option<Node>`, where `None` means "this node was
+/// deleted". `structural_node_keys` contains representative node keys for
+/// branch-only writes that need score-index coverage even though no direct
+/// leaf update in the block covers that branch.
+pub struct SmtNodeChanges {
+    nodes: BTreeMap<BranchKey, Option<Node>>,
+    structural_node_keys: BTreeSet<Hash>,
+}
+
+impl SmtNodeChanges {
+    pub fn new() -> Self {
+        Self { nodes: BTreeMap::new(), structural_node_keys: BTreeSet::new() }
+    }
+
+    pub fn structural_node_keys(&self) -> impl Iterator<Item = &Hash> {
+        self.structural_node_keys.iter()
+    }
+
+    fn record_structural_node_key(&mut self, node_key: Hash) {
+        self.structural_node_keys.insert(node_key);
+    }
+}
+
+impl Default for SmtNodeChanges {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Deref for SmtNodeChanges {
+    type Target = BTreeMap<BranchKey, Option<Node>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.nodes
+    }
+}
+
+impl DerefMut for SmtNodeChanges {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.nodes
+    }
+}
+
+impl<'a> IntoIterator for &'a SmtNodeChanges {
+    type Item = (&'a BranchKey, &'a Option<Node>);
+    type IntoIter = alloc::collections::btree_map::Iter<'a, BranchKey, Option<Node>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.nodes.iter()
+    }
+}
 
 /// Result of computing a subtree — propagated upward during recursion.
 enum NodeResult {
@@ -252,7 +302,7 @@ pub fn compute_root_update_into<H: SmtHasher, S: SmtStore>(
         return Ok(current_root);
     }
 
-    let result = compute_subtree::<H, S>(store, changes, leaf_updates.as_ref(), 0)?;
+    let result = compute_subtree::<H, S>(store, changes, leaf_updates.as_ref(), leaf_updates.as_ref(), 0)?;
 
     // Convert the root-level NodeResult to a root hash
     match &result {
@@ -314,9 +364,22 @@ fn merged_node<H: SmtHasher>(left: &NodeResult, right: &NodeResult, depth: usize
     (result, node)
 }
 
-fn record_change(changes: &mut SmtNodeChanges, subtree_key: BranchKey, existing: Option<Node>, new_node: Option<Node>) {
+fn record_structural_if_uncovered(changes: &mut SmtNodeChanges, subtree_key: BranchKey, actual_updates: SortedLeafUpdatesRef<'_>) {
+    if actual_updates.is_empty() {
+        changes.record_structural_node_key(subtree_key.node_key);
+    }
+}
+
+fn record_change(
+    changes: &mut SmtNodeChanges,
+    subtree_key: BranchKey,
+    existing: Option<Node>,
+    new_node: Option<Node>,
+    actual_updates: SortedLeafUpdatesRef<'_>,
+) {
     if existing != new_node {
         changes.insert(subtree_key, new_node);
+        record_structural_if_uncovered(changes, subtree_key, actual_updates);
     }
 }
 
@@ -344,6 +407,7 @@ fn compute_subtree<H: SmtHasher, S: SmtStore>(
     store: &S,
     changes: &mut SmtNodeChanges,
     updates: SortedLeafUpdatesRef<'_>,
+    actual_updates: SortedLeafUpdatesRef<'_>,
     depth: usize,
 ) -> Result<NodeResult, S::Error> {
     debug_assert!(!updates.is_empty());
@@ -358,7 +422,7 @@ fn compute_subtree<H: SmtHasher, S: SmtStore>(
             return Ok(NodeResult::Empty);
         }
         let cl = CollapsedLeaf { lane_key: u.key, leaf_hash: u.leaf_hash };
-        record_change(changes, subtree_key, existing, Some(Node::Collapsed(cl)));
+        record_change(changes, subtree_key, existing, Some(Node::Collapsed(cl)), actual_updates);
         return Ok(NodeResult::Collapsed(cl));
     }
 
@@ -371,7 +435,7 @@ fn compute_subtree<H: SmtHasher, S: SmtStore>(
         } else {
             Some(Node::Collapsed(CollapsedLeaf { lane_key: u.key, leaf_hash: u.leaf_hash }))
         };
-        record_change(changes, subtree_key, existing, new_node);
+        record_change(changes, subtree_key, existing, new_node, actual_updates);
         return Ok(leaf_result(Some(u)));
     }
 
@@ -385,22 +449,23 @@ fn compute_subtree<H: SmtHasher, S: SmtStore>(
         let left_result = leaf_result(updates.first_with_bit(depth, false));
         let right_result = leaf_result(updates.first_with_bit(depth, true));
         let (result, new_node) = merged_node::<H>(&left_result, &right_result, DEPTH - 1);
-        record_change(changes, subtree_key, existing_for_write, new_node);
+        record_change(changes, subtree_key, existing_for_write, new_node, actual_updates);
         return Ok(result);
     }
 
     let (left_updates, right_updates) = updates.partition_by_bit(depth);
+    let (left_actual_updates, right_actual_updates) = actual_updates.partition_by_bit(depth);
 
     let left_result = if left_updates.is_empty() {
         read_sibling_result::<S>(store, changes, &subtree_key, false, depth)?
     } else {
-        compute_subtree::<H, S>(store, changes, left_updates, depth + 1)?
+        compute_subtree::<H, S>(store, changes, left_updates, left_actual_updates, depth + 1)?
     };
 
     let right_result = if right_updates.is_empty() {
         read_sibling_result::<S>(store, changes, &subtree_key, true, depth)?
     } else {
-        compute_subtree::<H, S>(store, changes, right_updates, depth + 1)?
+        compute_subtree::<H, S>(store, changes, right_updates, right_actual_updates, depth + 1)?
     };
 
     let (result, new_node) = merged_node::<H>(&left_result, &right_result, depth);
@@ -435,9 +500,11 @@ fn compute_subtree<H: SmtHasher, S: SmtStore>(
         // (in which case `record_change`'s `existing == new_node` skip
         // would suppress the write, leaving the stale entry alive).
         changes.insert(child_key, None);
+        let actual_child_updates = if goes_right { right_actual_updates } else { left_actual_updates };
+        record_structural_if_uncovered(changes, child_key, actual_child_updates);
     }
 
-    record_change(changes, subtree_key, existing_for_write, new_node);
+    record_change(changes, subtree_key, existing_for_write, new_node, actual_updates);
     Ok(result)
 }
 
@@ -2150,7 +2217,11 @@ mod tests {
         let l2 = test_leaf(b"v2");
 
         let mut store = BTreeSmtStore::new();
-        let root_after_expire = build_state(&mut store, &[vec![(k1, l1), (k2, l2)], vec![(k2, ZERO_HASH)]]);
+        let root_after_insert = build_state(&mut store, &[vec![(k1, l1), (k2, l2)]]);
+        let (root_after_expire, changes) =
+            compute_root_update::<TestHasher, _>(&store, root_after_insert, updates([(k2, ZERO_HASH)])).unwrap();
+        assert!(changes.structural_node_keys().any(|node_key| (0..DEPTH).any(|d| BranchKey::new(d as u8, &k1).node_key == *node_key)));
+        apply_changes(&mut store, &changes);
 
         let mut fresh = BTreeSmtStore::new();
         let fresh_root = build_state(&mut fresh, &[vec![(k1, l1)]]);
