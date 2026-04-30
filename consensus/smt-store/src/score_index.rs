@@ -80,6 +80,30 @@ impl DbScoreIndex {
         writer.put(key, value).map_err(StoreError::DbError)
     }
 
+    pub fn assert_no_entries_at_or_below(&self, cutoff_blue_score: u64) -> StoreResult<()> {
+        let prefix_bytes = [self.prefix];
+        let mut iter = self.db.raw_iterator();
+        iter.seek(prefix_bytes);
+
+        while iter.valid() {
+            let Some(key_bytes) = iter.key() else { break };
+            if !key_bytes.starts_with(&prefix_bytes) {
+                break;
+            }
+            let key = ScoreIndexKey::try_ref_from_key_bytes(key_bytes)
+                .map_err(|e| StoreError::DataInconsistency(format!("score index key: {e}")))?;
+            let blue_score = key.rev_blue_score.blue_score();
+            if blue_score <= cutoff_blue_score {
+                return Err(StoreError::DataInconsistency(format!(
+                    "stale score index entry at blue score {blue_score} <= cutoff {cutoff_blue_score}"
+                )));
+            }
+            iter.next();
+        }
+
+        iter.status().map_err(StoreError::DbError)
+    }
+
     /// Iterate `LeafUpdate` entries across the inclusive score band.
     ///
     /// Skips `Structural` entries. Used by expiration logic to find lanes whose

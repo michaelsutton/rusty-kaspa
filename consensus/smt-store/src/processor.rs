@@ -366,6 +366,13 @@ impl SmtStores {
         self.branch_cache.lock().clear();
         self.lane_cache.lock().clear();
     }
+
+    pub fn assert_no_entries_at_or_below(&self, cutoff_blue_score: u64) -> StoreResult<()> {
+        self.branch_version.assert_no_entries_at_or_below(cutoff_blue_score)?;
+        self.lane_version.assert_no_entries_at_or_below(cutoff_blue_score)?;
+        self.score_index.assert_no_entries_at_or_below(cutoff_blue_score)?;
+        Ok(())
+    }
 }
 
 /// Abstraction over lane change collections.

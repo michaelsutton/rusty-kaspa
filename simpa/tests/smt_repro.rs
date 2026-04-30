@@ -28,9 +28,9 @@ const LANE_COUNT: u32 = 2_000;
 const LANE_BAND: u32 = 200;
 const LANE_EPOCH_BLOCKS: u64 = 55;
 const LANE_CARRY_PERCENT: u32 = 10;
-const FINALITY_DEPTH: u64 = 100 * 2 * 5;
-const PRUNING_DEPTH: u64 = 100 * 2 * 5 * 2 + 50 * 5;
-const MIN_TARGET_BLOCKS: u64 = 10_000;
+const FINALITY_DEPTH: u64 = 100 * 2 * 2;
+const PRUNING_DEPTH: u64 = 100 * 2 * 2 * 2 + 50 * 2;
+const MIN_TARGET_BLOCKS: u64 = 5_000;
 const TARGET_BLOCKS: u64 =
     if MIN_TARGET_BLOCKS > PRUNING_DEPTH + 2 * FINALITY_DEPTH { MIN_TARGET_BLOCKS } else { PRUNING_DEPTH + 2 * FINALITY_DEPTH };
 const SMT_CHUNK_SIZE: usize = 4096;
@@ -76,9 +76,14 @@ fn assert_pruning_point_smt_roundtrip(seed: u64) {
     consensus.shutdown(handles);
 
     let pp = consensus.pruning_point();
+    let pp_header = consensus.get_header(pp).unwrap();
     let metadata = consensus.get_pruning_point_smt_metadata(pp).unwrap();
     let (imported_root, imported_lanes) =
         import_exported_pruning_point_smt(&*consensus, pp, metadata.lanes_root, metadata.active_lanes_count);
+    let smt_cutoff = pp_header.blue_score.saturating_sub(FINALITY_DEPTH).saturating_sub(1);
+    consensus
+        .verify_no_stale_smt_entries(smt_cutoff)
+        .unwrap_or_else(|e| panic!("seed {seed}: stale SMT entry remained at or below cutoff {smt_cutoff}: {e}"));
     let metadata_lanes = metadata.active_lanes_count;
     let metadata_root = metadata.lanes_root;
 
@@ -129,7 +134,12 @@ fn apply_perf_params(perf: &mut PerfParams) {
     perf.virtual_processor_num_threads = 2;
 }
 
-fn import_exported_pruning_point_smt(consensus: &dyn ConsensusApi, pp: Hash, lanes_root: Hash, expected_lane_count: u64) -> (Hash, u64) {
+fn import_exported_pruning_point_smt(
+    consensus: &dyn ConsensusApi,
+    pp: Hash,
+    lanes_root: Hash,
+    expected_lane_count: u64,
+) -> (Hash, u64) {
     let (_lt, db) = create_temp_db!(ConnBuilder::default().with_files_limit(10));
     let stores = SmtStores::new(db.clone(), 1, 1);
     let mut stream = consensus.open_pruning_point_smt_lane_stream(pp).unwrap();

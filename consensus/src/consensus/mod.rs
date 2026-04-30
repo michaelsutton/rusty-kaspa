@@ -85,7 +85,7 @@ use itertools::Itertools;
 use kaspa_consensusmanager::{SessionLock, SessionReadGuard};
 
 use kaspa_core::info;
-use kaspa_database::prelude::StoreResultExt;
+use kaspa_database::prelude::{StoreResult, StoreResultExt};
 use kaspa_hashes::Hash;
 use kaspa_muhash::MuHash;
 use kaspa_smt_store::processor::SmtReadBounds;
@@ -621,6 +621,10 @@ impl Consensus {
         }
 
         Ok(())
+    }
+
+    pub fn verify_no_stale_smt_entries(&self, cutoff_blue_score: u64) -> StoreResult<()> {
+        self.storage.smt_stores.assert_no_entries_at_or_below(cutoff_blue_score)
     }
 }
 
