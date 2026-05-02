@@ -39,6 +39,7 @@ use kaspa_p2p_mining::rule_engine::MiningRuleEngine;
 use kaspa_utils::iter::IterExtensions;
 use kaspa_utils::networking::PeerId;
 use parking_lot::{Mutex, RwLock};
+use regex::Regex;
 use std::collections::HashMap;
 use std::time::Instant;
 use std::{collections::hash_map::Entry, fmt::Display};
@@ -69,8 +70,6 @@ const MAX_ORPHANS_UPPER_BOUND: usize = 1024;
 
 /// The min time to wait before allowing another parallel request
 const REQUEST_SCOPE_WAIT_TIME: Duration = Duration::from_secs(1);
-
-const MIN_ACCEPTED_KASPAD_USER_AGENT_VERSION: (u64, u64, u64) = (1, 1, 1);
 
 /// Represents a block event to be logged
 #[derive(Debug, PartialEq)]
@@ -223,6 +222,7 @@ pub struct FlowContextInner {
     mining_manager: MiningManagerProxy,
     pub(crate) tick_service: Arc<TickService>,
     notification_root: Arc<ConsensusNotificationRoot>,
+    user_agent_reject_filters: Vec<UserAgentRejectFilter>,
 
     // Special sampling logger used only for high-bps networks where logs must be throttled
     block_event_logger: Option<BlockEventLogger>,
@@ -235,6 +235,11 @@ pub struct FlowContextInner {
 
     // Mining rule engine
     mining_rule_engine: Arc<MiningRuleEngine>,
+}
+
+struct UserAgentRejectFilter {
+    pattern: String,
+    regex: Regex,
 }
 
 #[derive(Clone)]
@@ -312,6 +317,7 @@ impl FlowContext {
     ) -> Self {
         let bps = config.bps() as usize;
         let orphan_resolution_range = BASELINE_ORPHAN_RESOLUTION_RANGE + (bps as f64).log2().ceil() as u32;
+        let user_agent_reject_filters = build_user_agent_reject_filters(&config.reject_user_agent_regexes);
 
         // The maximum amount of orphans allowed in the orphans pool. This number is an approximation
         // of how many orphans there can possibly be on average bounded by an upper bound.
@@ -332,6 +338,7 @@ impl FlowContext {
                 mining_manager,
                 tick_service,
                 notification_root,
+                user_agent_reject_filters,
                 block_event_logger: Some(BlockEventLogger::new(bps)),
                 bps,
                 orphan_resolution_range,
@@ -737,8 +744,8 @@ impl ConnectionInitializer for FlowContext {
             return Err(ProtocolError::WrongNetwork(network_name, peer_version.network));
         }
 
-        if should_reject_user_agent(&peer_version.user_agent) {
-            info!("Rejecting peer {} by user agent filter: {}", router, peer_version.user_agent);
+        if let Some(filter) = matching_user_agent_reject_filter(&self.user_agent_reject_filters, &peer_version.user_agent) {
+            info!("Rejecting peer {} by user agent filter `{}`: {}", router, filter.pattern, peer_version.user_agent);
             return Err(ProtocolError::OtherOwned(format!("peer user agent rejected: {}", peer_version.user_agent)));
         }
 
@@ -793,63 +800,50 @@ impl ConnectionInitializer for FlowContext {
     }
 }
 
-fn should_reject_user_agent(user_agent: &str) -> bool {
-    user_agent.split('/').any(|segment| {
-        let Some((name, version)) = segment.split_once(':') else {
-            return false;
-        };
-
-        let name = name.trim();
-        let version = version.trim();
-
-        if !name.eq_ignore_ascii_case("kaspad") {
-            return false;
-        }
-
-        let version = version.split_once('(').map_or(version, |(version, _)| version).trim();
-        parse_semver_prefix(version).is_some_and(|version| version < MIN_ACCEPTED_KASPAD_USER_AGENT_VERSION)
-    })
+fn build_user_agent_reject_filters(patterns: &[String]) -> Vec<UserAgentRejectFilter> {
+    patterns
+        .iter()
+        .filter_map(|pattern| match Regex::new(pattern) {
+            Ok(regex) => Some(UserAgentRejectFilter { pattern: pattern.clone(), regex }),
+            Err(err) => {
+                warn!("Ignoring invalid user agent reject regex `{}`: {}", pattern, err);
+                None
+            }
+        })
+        .collect()
 }
 
-fn parse_semver_prefix(version: &str) -> Option<(u64, u64, u64)> {
-    let mut parts = version.split('.');
-    let major = parse_numeric_prefix(parts.next()?)?;
-    let minor = parts.next().and_then(parse_numeric_prefix).unwrap_or(0);
-    let patch = parts.next().and_then(parse_numeric_prefix).unwrap_or(0);
-    Some((major, minor, patch))
-}
-
-fn parse_numeric_prefix(part: &str) -> Option<u64> {
-    let digits_len = part.bytes().take_while(u8::is_ascii_digit).count();
-    if digits_len == 0 { None } else { part[..digits_len].parse().ok() }
+fn matching_user_agent_reject_filter<'a>(filters: &'a [UserAgentRejectFilter], user_agent: &str) -> Option<&'a UserAgentRejectFilter> {
+    filters.iter().find(|filter| filter.regex.is_match(user_agent))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::should_reject_user_agent;
+    use super::{UserAgentRejectFilter, matching_user_agent_reject_filter};
+    use regex::Regex;
 
-    #[test]
-    fn rejects_kaspad_user_agents_below_min_version() {
-        assert!(should_reject_user_agent("/kaspad:1.1.0/kaspad:1.1.0/"));
-        assert!(should_reject_user_agent("/kaspad:1.0.12/"));
-        assert!(should_reject_user_agent("/kaspad:0.12.19/"));
-        assert!(should_reject_user_agent("/kaspad:1.1/"));
-        assert!(should_reject_user_agent("/KASPAD:1.1.0(testnet-12)/"));
+    fn filter(pattern: &str) -> Vec<UserAgentRejectFilter> {
+        vec![UserAgentRejectFilter { pattern: pattern.to_owned(), regex: Regex::new(pattern).unwrap() }]
     }
 
     #[test]
-    fn accepts_kaspad_user_agents_at_or_above_min_version() {
-        assert!(!should_reject_user_agent("/kaspad:1.1.1/kaspad:1.1.1/"));
-        assert!(!should_reject_user_agent("/kaspad:1.1.1-toc.1/kaspad:1.1.1-toc.1/"));
-        assert!(!should_reject_user_agent("/kaspad:1.1.2/"));
-        assert!(!should_reject_user_agent("/kaspad:2.0.0/"));
+    fn rejects_user_agents_matching_regex() {
+        let filters = filter(r"(^|/)kaspad:(0\.|1\.0\.|1\.1\.0([^0-9]|$))");
+
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspad:1.1.0/kaspad:1.1.0/").is_some());
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspad:1.1.0-toc.0/").is_some());
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspad:1.0.12/").is_some());
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspad:0.12.19/").is_some());
     }
 
     #[test]
-    fn accepts_non_kaspad_or_unparseable_user_agents() {
-        assert!(!should_reject_user_agent("/seeder:1.0.0/"));
-        assert!(!should_reject_user_agent("/crawler:0.1.0/kaspad-dev:1.0.0/"));
-        assert!(!should_reject_user_agent("/kaspad:dev/"));
-        assert!(!should_reject_user_agent(""));
+    fn accepts_user_agents_not_matching_regex() {
+        let filters = filter(r"(^|/)kaspad:(0\.|1\.0\.|1\.1\.0([^0-9]|$))");
+
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspad:1.1.1/kaspad:1.1.1/").is_none());
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspad:1.1.1-toc.1/kaspad:1.1.1-toc.1/").is_none());
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspad:1.1.10/").is_none());
+        assert!(matching_user_agent_reject_filter(&filters, "/kaspa-dnsseeder:1.0.0/").is_none());
+        assert!(matching_user_agent_reject_filter(&filters, "/crawler:0.1.0/kaspad-dev:1.0.0/").is_none());
     }
 }

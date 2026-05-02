@@ -54,6 +54,9 @@ pub struct Config {
 
     pub user_agent_comments: Vec<String>,
 
+    /// Reject peers whose user agent matches any of these regexes.
+    pub reject_user_agent_regexes: Vec<String>,
+
     /// If undefined, sets it to 0.0.0.0
     pub p2p_listen_address: ContextualNetAddress,
 
@@ -90,6 +93,7 @@ impl Config {
             enable_unsynced_mining: false,
             enable_mainnet_mining: false,
             user_agent_comments: Default::default(),
+            reject_user_agent_regexes: Default::default(),
             externalip: None,
             p2p_listen_address: ContextualNetAddress::unspecified(),
             block_template_cache_lifetime: None,

@@ -52,6 +52,7 @@ pub struct Args {
     pub listen: Option<ContextualNetAddress>,
     #[serde(rename = "uacomment")]
     pub user_agent_comments: Vec<String>,
+    pub reject_ua: Vec<String>,
     pub utxoindex: bool,
     pub reset_db: bool,
     #[serde(rename = "outpeers")]
@@ -130,6 +131,7 @@ impl Default for Args {
             add_peers: vec![],
             listen: None,
             user_agent_comments: vec![],
+            reject_ua: vec![],
             yes: false,
             perf_metrics: false,
             perf_metrics_interval_sec: 10,
@@ -167,6 +169,7 @@ impl Args {
         // TODO: change to `config.enable_sanity_checks = self.sanity` when we reach stable versions
         config.enable_sanity_checks = true;
         config.user_agent_comments.clone_from(&self.user_agent_comments);
+        config.reject_user_agent_regexes.clone_from(&self.reject_ua);
         config.block_template_cache_lifetime = self.block_template_cache_lifetime;
         config.p2p_listen_address = self.listen.unwrap_or(ContextualNetAddress::unspecified());
         config.externalip = self.externalip.map(|v| v.normalize(config.default_p2p_port()));
@@ -379,6 +382,15 @@ Setting to 0 prevents the preallocation and sets the maximum to {}, leading to 0
                 .help("Comment to add to the user agent -- See BIP 14 for more information."),
         )
         .arg(
+            Arg::new("reject_ua")
+                .long("reject-ua")
+                .env("KASPAD_REJECT_UA")
+                .value_name("REGEX")
+                .action(ArgAction::Append)
+                .require_equals(true)
+                .help("Reject peers whose user agent matches this regex."),
+        )
+        .arg(
             Arg::new("externalip")
                 .long("externalip")
                 .env("KASPAD_EXTERNALIP")
@@ -520,6 +532,7 @@ impl Args {
             sanity: arg_match_unwrap_or::<bool>(&m, "sanity", defaults.sanity),
             yes: arg_match_unwrap_or::<bool>(&m, "yes", defaults.yes),
             user_agent_comments: arg_match_many_unwrap_or::<String>(&m, "user_agent_comments", defaults.user_agent_comments),
+            reject_ua: arg_match_many_unwrap_or::<String>(&m, "reject_ua", defaults.reject_ua),
             externalip: m.get_one::<ContextualNetAddress>("externalip").cloned(),
             perf_metrics: arg_match_unwrap_or::<bool>(&m, "perf-metrics", defaults.perf_metrics),
             perf_metrics_interval_sec: arg_match_unwrap_or::<u64>(&m, "perf-metrics-interval-sec", defaults.perf_metrics_interval_sec),
@@ -547,6 +560,8 @@ impl Args {
             println!("\nNOTE: The flag --enable-mainnet-mining is deprecated and defaults to true also w/o explicit setting\n")
         }
 
+        validate_reject_ua_regexes(&args.reject_ua)?;
+
         Ok(args)
     }
 }
@@ -561,6 +576,34 @@ fn arg_match_many_unwrap_or<T: Clone + Send + Sync + 'static>(m: &clap::ArgMatch
     match m.get_many::<T>(arg_id) {
         Some(val_ref) => val_ref.cloned().collect(),
         None => default,
+    }
+}
+
+fn validate_reject_ua_regexes(regexes: &[String]) -> Result<(), clap::Error> {
+    for pattern in regexes {
+        regex::Regex::new(pattern).map_err(|err| {
+            clap::Error::raw(clap::error::ErrorKind::ValueValidation, format!("invalid --reject-ua regex `{}`: {}", pattern, err))
+        })?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Args;
+
+    #[test]
+    fn parses_reject_ua_regexes() {
+        let args = Args::parse(["kaspad", r"--reject-ua=(^|/)kaspad:1\.1\.0(/|$)", r"--reject-ua=(^|/)kaspa-test-tool:"]).unwrap();
+
+        assert_eq!(args.reject_ua, vec![r"(^|/)kaspad:1\.1\.0(/|$)", r"(^|/)kaspa-test-tool:"]);
+    }
+
+    #[test]
+    fn rejects_invalid_reject_ua_regex() {
+        let err = Args::parse(["kaspad", "--reject-ua=*"]).unwrap_err();
+
+        assert!(err.to_string().contains("invalid --reject-ua regex"));
     }
 }
 
