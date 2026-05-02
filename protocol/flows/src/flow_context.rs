@@ -70,6 +70,8 @@ const MAX_ORPHANS_UPPER_BOUND: usize = 1024;
 /// The min time to wait before allowing another parallel request
 const REQUEST_SCOPE_WAIT_TIME: Duration = Duration::from_secs(1);
 
+const MIN_ACCEPTED_KASPAD_USER_AGENT_VERSION: (u64, u64, u64) = (1, 1, 1);
+
 /// Represents a block event to be logged
 #[derive(Debug, PartialEq)]
 pub enum BlockLogEvent {
@@ -735,6 +737,11 @@ impl ConnectionInitializer for FlowContext {
             return Err(ProtocolError::WrongNetwork(network_name, peer_version.network));
         }
 
+        if should_reject_user_agent(&peer_version.user_agent) {
+            info!("Rejecting peer {} by user agent filter: {}", router, peer_version.user_agent);
+            return Err(ProtocolError::OtherOwned(format!("peer user agent rejected: {}", peer_version.user_agent)));
+        }
+
         debug!("protocol versions - self: {}, peer: {}", PROTOCOL_VERSION, peer_version.protocol_version);
 
         // Register all flows according to version
@@ -783,5 +790,66 @@ impl ConnectionInitializer for FlowContext {
         // it is considered a protocol error and the connection will disconnect
 
         Ok(())
+    }
+}
+
+fn should_reject_user_agent(user_agent: &str) -> bool {
+    user_agent.split('/').any(|segment| {
+        let Some((name, version)) = segment.split_once(':') else {
+            return false;
+        };
+
+        let name = name.trim();
+        let version = version.trim();
+
+        if !name.eq_ignore_ascii_case("kaspad") {
+            return false;
+        }
+
+        let version = version.split_once('(').map_or(version, |(version, _)| version).trim();
+        parse_semver_prefix(version).is_some_and(|version| version < MIN_ACCEPTED_KASPAD_USER_AGENT_VERSION)
+    })
+}
+
+fn parse_semver_prefix(version: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = version.split('.');
+    let major = parse_numeric_prefix(parts.next()?)?;
+    let minor = parts.next().and_then(parse_numeric_prefix).unwrap_or(0);
+    let patch = parts.next().and_then(parse_numeric_prefix).unwrap_or(0);
+    Some((major, minor, patch))
+}
+
+fn parse_numeric_prefix(part: &str) -> Option<u64> {
+    let digits_len = part.bytes().take_while(u8::is_ascii_digit).count();
+    if digits_len == 0 { None } else { part[..digits_len].parse().ok() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_reject_user_agent;
+
+    #[test]
+    fn rejects_kaspad_user_agents_below_min_version() {
+        assert!(should_reject_user_agent("/kaspad:1.1.0/kaspad:1.1.0/"));
+        assert!(should_reject_user_agent("/kaspad:1.0.12/"));
+        assert!(should_reject_user_agent("/kaspad:0.12.19/"));
+        assert!(should_reject_user_agent("/kaspad:1.1/"));
+        assert!(should_reject_user_agent("/KASPAD:1.1.0(testnet-12)/"));
+    }
+
+    #[test]
+    fn accepts_kaspad_user_agents_at_or_above_min_version() {
+        assert!(!should_reject_user_agent("/kaspad:1.1.1/kaspad:1.1.1/"));
+        assert!(!should_reject_user_agent("/kaspad:1.1.1-toc.1/kaspad:1.1.1-toc.1/"));
+        assert!(!should_reject_user_agent("/kaspad:1.1.2/"));
+        assert!(!should_reject_user_agent("/kaspad:2.0.0/"));
+    }
+
+    #[test]
+    fn accepts_non_kaspad_or_unparseable_user_agents() {
+        assert!(!should_reject_user_agent("/seeder:1.0.0/"));
+        assert!(!should_reject_user_agent("/crawler:0.1.0/kaspad-dev:1.0.0/"));
+        assert!(!should_reject_user_agent("/kaspad:dev/"));
+        assert!(!should_reject_user_agent(""));
     }
 }
