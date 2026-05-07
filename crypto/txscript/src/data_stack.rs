@@ -539,9 +539,287 @@ impl Stack {
 #[cfg(test)]
 mod tests {
     use super::OpcodeData;
-    use crate::data_stack::{SizedEncodeInt, serialize_i64};
+    use crate::data_stack::{SizedEncodeInt, Stack, serialize_i64};
     use kaspa_txscript_errors::{SerializationError, TxScriptError};
     use kaspa_utils::hex::FromHex;
+
+    fn audit_stack(entries: usize) -> Vec<Vec<u8>> {
+        (0..entries)
+            .map(|index| {
+                let len = index % 5;
+                let mut item = vec![index as u8; len];
+                item.push((index >> 8) as u8);
+                item
+            })
+            .collect()
+    }
+
+    fn stack_to_vec(stack: &Stack) -> Vec<Vec<u8>> {
+        stack.inner().iter().map(|entry| entry.to_vec()).collect()
+    }
+
+    fn master_reference_rot<const SIZE: usize>(stack: &mut Vec<Vec<u8>>) -> Result<(), TxScriptError> {
+        match stack.len() >= 3 * SIZE {
+            true => {
+                let drained = stack.drain(stack.len() - 3 * SIZE..stack.len() - 2 * SIZE).collect::<Vec<Vec<u8>>>();
+                stack.extend(drained);
+                Ok(())
+            }
+            false => Err(TxScriptError::InvalidStackOperation(3 * SIZE, stack.len())),
+        }
+    }
+
+    fn master_reference_swap<const SIZE: usize>(stack: &mut Vec<Vec<u8>>) -> Result<(), TxScriptError> {
+        match stack.len() >= 2 * SIZE {
+            true => {
+                let drained = stack.drain(stack.len() - 2 * SIZE..stack.len() - SIZE).collect::<Vec<Vec<u8>>>();
+                stack.extend(drained);
+                Ok(())
+            }
+            false => Err(TxScriptError::InvalidStackOperation(2 * SIZE, stack.len())),
+        }
+    }
+
+    fn old_roll_remove_push_reference(stack: &mut Vec<Vec<u8>>, loc: usize) -> Result<(), TxScriptError> {
+        if loc >= stack.len() {
+            return Err(TxScriptError::InvalidStackOperation(loc, stack.len()));
+        }
+
+        let item = stack.remove(stack.len() - loc - 1);
+        stack.push(item);
+        Ok(())
+    }
+
+    fn master_reference_serialize_i64(from: i64) -> Vec<u8> {
+        let sign = from.signum();
+        let mut positive = from.unsigned_abs();
+        let mut last_saturated = false;
+        let mut number_vec: Vec<u8> = std::iter::from_fn(move || {
+            if positive == 0 {
+                if last_saturated {
+                    last_saturated = false;
+                    Some(0)
+                } else {
+                    None
+                }
+            } else {
+                let value = positive & 0xff;
+                last_saturated = (value & 0x80) != 0;
+                positive >>= 8;
+                Some(value as u8)
+            }
+        })
+        .collect();
+
+        if sign == -1 {
+            match number_vec.last_mut() {
+                Some(num) => *num |= 0x80,
+                _ => unreachable!(),
+            }
+        }
+        number_vec
+    }
+
+    fn master_reference_check_minimal_data_encoding(v: &[u8]) -> Result<(), TxScriptError> {
+        if v.is_empty() {
+            return Ok(());
+        }
+
+        if v[v.len() - 1] & 0x7f == 0 && (v.len() == 1 || v[v.len() - 2] & 0x80 == 0) {
+            return Err(TxScriptError::NotMinimalData(format!("numeric value encoded as {v:x?} is not minimally encoded")));
+        }
+        Ok(())
+    }
+
+    fn master_reference_deserialize_i64(v: &[u8]) -> Result<i64, TxScriptError> {
+        match v.len() {
+            l if l > size_of::<i64>() => {
+                Err(TxScriptError::NotMinimalData(format!("numeric value encoded as {v:x?} is longer than 8 bytes")))
+            }
+            0 => Ok(0),
+            _ => {
+                master_reference_check_minimal_data_encoding(v)?;
+                let msb = v[v.len() - 1];
+                let sign = 1 - 2 * ((msb >> 7) as i64);
+                let first_byte = (msb & 0x7f) as i64;
+                Ok(v[..v.len() - 1].iter().rev().map(|v| *v as i64).fold(first_byte, |accum, item| (accum << 8) + item) * sign)
+            }
+        }
+    }
+
+    fn master_reference_deserialize_sized<const LEN: usize>(v: &[u8]) -> Result<SizedEncodeInt<LEN>, TxScriptError> {
+        match v.len() > LEN {
+            true => Err(TxScriptError::NumberTooBig(format!(
+                "numeric value encoded as {:x?} is {} bytes which exceeds the max allowed of {}",
+                v,
+                v.len(),
+                LEN
+            ))),
+            false => master_reference_deserialize_i64(v).map(SizedEncodeInt::<LEN>),
+        }
+    }
+
+    fn audit_numeric_inputs() -> Vec<Vec<u8>> {
+        let mut inputs = vec![vec![]];
+        for len in 1..=9 {
+            inputs.push(vec![0; len]);
+            inputs.push(vec![1; len]);
+            inputs.push(vec![0x7f; len]);
+            inputs.push(vec![0x80; len]);
+            inputs.push(vec![0xff; len]);
+
+            let mut low_one = vec![0; len];
+            low_one[0] = 1;
+            inputs.push(low_one);
+
+            let mut high_one = vec![0; len];
+            high_one[len - 1] = 1;
+            inputs.push(high_one);
+
+            let mut sign_boundary = vec![0; len];
+            sign_boundary[0] = 0x80;
+            if len > 1 {
+                sign_boundary[1] = 0x00;
+            }
+            inputs.push(sign_boundary);
+        }
+        inputs.sort();
+        inputs.dedup();
+        inputs
+    }
+
+    fn assert_rot_matches_master_reference<const SIZE: usize>() {
+        for entries in 0..=64 {
+            let initial = audit_stack(entries);
+            let mut current = Stack::from(initial.clone());
+            let mut reference = initial;
+
+            let current_result = current.rot_items::<SIZE>();
+            let reference_result = master_reference_rot::<SIZE>(&mut reference);
+
+            assert_eq!(current_result, reference_result, "rot_items::<{SIZE}> result mismatch at stack len {entries}");
+            assert_eq!(stack_to_vec(&current), reference, "rot_items::<{SIZE}> stack mismatch at stack len {entries}");
+        }
+    }
+
+    fn assert_swap_matches_master_reference<const SIZE: usize>() {
+        for entries in 0..=64 {
+            let initial = audit_stack(entries);
+            let mut current = Stack::from(initial.clone());
+            let mut reference = initial;
+
+            let current_result = current.swap_items::<SIZE>();
+            let reference_result = master_reference_swap::<SIZE>(&mut reference);
+
+            assert_eq!(current_result, reference_result, "swap_items::<{SIZE}> result mismatch at stack len {entries}");
+            assert_eq!(stack_to_vec(&current), reference, "swap_items::<{SIZE}> stack mismatch at stack len {entries}");
+        }
+    }
+
+    #[test]
+    fn audit_canonical_number_serialization_matches_master_reference_algorithm() {
+        let values = (-10_000i64..=10_000).chain([
+            i64::MIN + 1,
+            i64::MIN / 2,
+            i32::MIN as i64 - 1,
+            i32::MIN as i64,
+            i32::MAX as i64,
+            i32::MAX as i64 + 1,
+            i64::MAX / 2,
+            i64::MAX,
+        ]);
+
+        for value in values {
+            let current = serialize_i64(value, None).map(|entry| entry.into_vec());
+            let reference = master_reference_serialize_i64(value);
+
+            assert_eq!(current, Ok(reference.clone()), "serialize_i64({value}) mismatch");
+            assert_eq!(
+                <Vec<u8> as OpcodeData<i64>>::serialize(&value),
+                Ok(reference),
+                "OpcodeData::<i64>::serialize({value}) mismatch"
+            );
+        }
+
+        assert_eq!(
+            <Vec<u8> as OpcodeData<i64>>::serialize(&i64::MIN),
+            Err(SerializationError::NumberTooLong(i64::MIN, 8)),
+            "i64::MIN must remain unrepresentable in canonical 8-byte script number encoding"
+        );
+    }
+
+    #[test]
+    fn audit_pre_activation_number_deserialization_matches_master_reference_algorithm() {
+        for input in audit_numeric_inputs() {
+            assert_eq!(
+                <Vec<u8> as OpcodeData<i64>>::deserialize(&input, true),
+                master_reference_deserialize_sized::<8>(&input).map(i64::from),
+                "pre-activation i64 deserialize mismatch for {input:x?}"
+            );
+            assert_eq!(
+                <Vec<u8> as OpcodeData<i32>>::deserialize(&input, true),
+                master_reference_deserialize_sized::<4>(&input).map(|v| i32::try_from(v).expect("master i32 is within range")),
+                "pre-activation i32 deserialize mismatch for {input:x?}"
+            );
+        }
+    }
+
+    #[test]
+    fn audit_stack_pop_items_uses_master_canonical_rules_when_covenants_disabled() {
+        for input in audit_numeric_inputs() {
+            let prefix = vec![0xaa];
+            let mut current = Stack::new(vec![prefix.clone().into(), input.clone().into()], false);
+            let mut reference = vec![prefix.clone(), input.clone()];
+
+            let current_result: Result<[i64; 1], TxScriptError> = current.pop_items();
+            let reference_result = if reference.is_empty() {
+                Err(TxScriptError::InvalidStackOperation(1, reference.len()))
+            } else {
+                let popped = reference.split_off(reference.len() - 1);
+                master_reference_deserialize_sized::<8>(&popped[0]).map(|v| [i64::from(v)])
+            };
+
+            assert_eq!(current_result, reference_result, "pop_items::<i64> result mismatch for {input:x?}");
+            assert_eq!(stack_to_vec(&current), reference, "pop_items::<i64> stack mutation mismatch for {input:x?}");
+        }
+    }
+
+    #[test]
+    fn audit_rot_items_matches_master_reference_algorithm() {
+        assert_rot_matches_master_reference::<1>();
+        assert_rot_matches_master_reference::<2>();
+        assert_rot_matches_master_reference::<3>();
+        assert_rot_matches_master_reference::<4>();
+        assert_rot_matches_master_reference::<5>();
+        assert_rot_matches_master_reference::<8>();
+    }
+
+    #[test]
+    fn audit_swap_items_matches_master_reference_algorithm() {
+        assert_swap_matches_master_reference::<1>();
+        assert_swap_matches_master_reference::<2>();
+        assert_swap_matches_master_reference::<3>();
+        assert_swap_matches_master_reference::<4>();
+        assert_swap_matches_master_reference::<5>();
+        assert_swap_matches_master_reference::<8>();
+    }
+
+    #[test]
+    fn audit_roll_matches_remove_then_push_reference_algorithm() {
+        for entries in 0..=64 {
+            for loc in 0..=entries + 2 {
+                let initial = audit_stack(entries);
+                let mut current = Stack::from(initial.clone());
+                let mut reference = initial;
+
+                let current_result = current.roll(loc);
+                let reference_result = old_roll_remove_push_reference(&mut reference, loc);
+
+                assert_eq!(current_result, reference_result, "roll({loc}) result mismatch at stack len {entries}");
+                assert_eq!(stack_to_vec(&current), reference, "roll({loc}) stack mismatch at stack len {entries}");
+            }
+        }
+    }
 
     // TestScriptNumBytes
     #[test]

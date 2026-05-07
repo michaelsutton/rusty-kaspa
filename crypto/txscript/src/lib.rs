@@ -1081,6 +1081,101 @@ mod tests {
     }
 
     #[test]
+    fn audit_engine_flag_restores_master_minimal_push_rule_when_covenants_disabled() {
+        let sig_cache = Cache::new(10_000);
+        let reused_values = SigHashReusedValuesUnsync::new();
+        let non_minimal_push_of_true = [OpPushData1, 1, 1];
+
+        let mut disabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &non_minimal_push_of_true,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: false, ..Default::default() },
+        );
+        assert!(matches!(disabled_vm.execute(), Err(TxScriptError::NotMinimalData(_))));
+
+        let mut enabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &non_minimal_push_of_true,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: true, ..Default::default() },
+        );
+        assert_eq!(enabled_vm.execute(), Ok(()));
+    }
+
+    #[test]
+    fn audit_engine_flag_restores_master_numeric_canonicalization_when_covenants_disabled() {
+        let sig_cache = Cache::new(10_000);
+        let reused_values = SigHashReusedValuesUnsync::new();
+
+        let non_minimal_one_then_add = [OpData2, 1, 0, OpTrue, crate::opcodes::codes::OpAdd, crate::opcodes::codes::Op2, OpEqual];
+
+        let mut disabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &non_minimal_one_then_add,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: false, ..Default::default() },
+        );
+        assert!(matches!(disabled_vm.execute(), Err(TxScriptError::NotMinimalData(_))));
+
+        let mut enabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &non_minimal_one_then_add,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: true, ..Default::default() },
+        );
+        assert_eq!(enabled_vm.execute(), Ok(()));
+    }
+
+    #[test]
+    fn audit_engine_flag_restores_master_i32_four_byte_limit_when_covenants_disabled() {
+        let sig_cache = Cache::new(10_000);
+        let reused_values = SigHashReusedValuesUnsync::new();
+
+        let five_byte_zero_pick = [OpTrue, crate::opcodes::codes::OpData5, 0, 0, 0, 0, 0, crate::opcodes::codes::OpPick, OpEqual];
+
+        let mut disabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &five_byte_zero_pick,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: false, ..Default::default() },
+        );
+        assert!(matches!(disabled_vm.execute(), Err(TxScriptError::NumberTooBig(_))));
+
+        let mut enabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &five_byte_zero_pick,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: true, ..Default::default() },
+        );
+        assert_eq!(enabled_vm.execute(), Ok(()));
+    }
+
+    #[test]
+    fn audit_engine_flag_restores_master_minimal_if_rule_when_covenants_disabled() {
+        let sig_cache = Cache::new(10_000);
+        let reused_values = SigHashReusedValuesUnsync::new();
+
+        let non_minimal_true_for_if = [crate::opcodes::codes::Op2, OpIf, OpTrue, OpEndIf];
+
+        let mut disabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &non_minimal_true_for_if,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: false, ..Default::default() },
+        );
+        assert_eq!(disabled_vm.execute(), Err(TxScriptError::InvalidState("expected boolean".to_string())));
+
+        let mut enabled_vm = TxScriptEngine::<VerifiableTransactionMock, SigHashReusedValuesUnsync>::from_script(
+            &non_minimal_true_for_if,
+            &reused_values,
+            &sig_cache,
+            EngineFlags { covenants_enabled: true, ..Default::default() },
+        );
+        assert_eq!(enabled_vm.execute(), Ok(()));
+    }
+
+    #[test]
     fn test_literal_data_pushes_do_not_consume_script_units() {
         let sig_cache = Cache::new(10_000);
         let reused_values = SigHashReusedValuesUnsync::new();
