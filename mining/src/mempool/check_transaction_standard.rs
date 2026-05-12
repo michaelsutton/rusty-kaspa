@@ -132,6 +132,9 @@ mod tests {
     use std::sync::Arc;
 
     const RELAY_FEE_TEST_MASS: u64 = 500_000;
+    const fn default_minimum_relay_fee_for_mass(mass: u64) -> u64 {
+        mass * DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE / 1000
+    }
 
     #[test]
     fn test_calc_min_required_tx_relay_fee() {
@@ -155,13 +158,13 @@ mod tests {
                 name: "100 bytes with default minimum relay fee",
                 size: 100,
                 minimum_relay_transaction_fee: DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE,
-                want: 100,
+                want: default_minimum_relay_fee_for_mass(100),
             },
             Test {
                 name: "large relay fee test mass with default minimum relay fee",
                 size: RELAY_FEE_TEST_MASS,
                 minimum_relay_transaction_fee: DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE,
-                want: RELAY_FEE_TEST_MASS,
+                want: default_minimum_relay_fee_for_mass(RELAY_FEE_TEST_MASS),
             },
             Test { name: "1500 bytes with 5000 relay fee", size: 1500, minimum_relay_transaction_fee: 5000, want: 7500 },
             Test { name: "1500 bytes with 3000 relay fee", size: 1500, minimum_relay_transaction_fee: 3000, want: 4500 },
@@ -369,26 +372,38 @@ mod tests {
             mtx
         }
 
+        let insufficient_fee_mass = 10_000;
+        let insufficient_fee_minimum = default_minimum_relay_fee_for_mass(insufficient_fee_mass);
+        let insufficient_fee = insufficient_fee_minimum - 1;
+
         let tests = vec![
             Test {
                 name: "standard input with sufficient fee",
-                mtx: new_mtx(standard_script_public_key.clone(), NonContextualMasses::new(1_000, 500), 1_000),
+                mtx: new_mtx(
+                    standard_script_public_key.clone(),
+                    NonContextualMasses::new(1_000, 500),
+                    DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE,
+                ),
                 expected: Expected::Standard,
             },
             Test {
                 name: "non-standard input script class",
-                mtx: new_mtx(non_standard_script_public_key, NonContextualMasses::new(1_000, 1_000), 1_000),
+                mtx: new_mtx(
+                    non_standard_script_public_key,
+                    NonContextualMasses::new(1_000, 1_000),
+                    DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE,
+                ),
                 expected: Expected::RejectInputScriptClass,
             },
             Test {
                 name: "compute mass triggers insufficient relay fee",
-                mtx: new_mtx(standard_script_public_key.clone(), NonContextualMasses::new(10_000, 1), 9_999),
-                expected: Expected::RejectInsufficientFee { fee: 9_999, minimum_fee: 10_000 },
+                mtx: new_mtx(standard_script_public_key.clone(), NonContextualMasses::new(insufficient_fee_mass, 1), insufficient_fee),
+                expected: Expected::RejectInsufficientFee { fee: insufficient_fee, minimum_fee: insufficient_fee_minimum },
             },
             Test {
                 name: "transient mass triggers insufficient relay fee",
-                mtx: new_mtx(standard_script_public_key, NonContextualMasses::new(1, 10_000), 9_999),
-                expected: Expected::RejectInsufficientFee { fee: 9_999, minimum_fee: 10_000 },
+                mtx: new_mtx(standard_script_public_key, NonContextualMasses::new(1, insufficient_fee_mass), insufficient_fee),
+                expected: Expected::RejectInsufficientFee { fee: insufficient_fee, minimum_fee: insufficient_fee_minimum },
             },
         ];
 
