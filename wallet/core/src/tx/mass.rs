@@ -17,7 +17,11 @@ pub const SIGNATURE_SIZE: u64 = 1 + 64 + 1; //1 byte for OP_DATA_65 + 64 (length
 
 /// MINIMUM_RELAY_TRANSACTION_FEE specifies the minimum transaction fee for a transaction to be accepted to
 /// the mempool and relayed. It is specified in sompi per 1kg (or 1000 grams) of transaction mass.
-pub(crate) const MINIMUM_RELAY_TRANSACTION_FEE: u64 = 1000;
+/// The default is 100 sompi per gram.
+pub(crate) const MINIMUM_RELAY_TRANSACTION_FEE: u64 = 100_000;
+
+/// Legacy fee ratio used only by wallet-side dust heuristics. This is no longer a mempool relay policy.
+const DUST_RELAY_TRANSACTION_FEE: u64 = 1000;
 
 /// MAXIMUM_STANDARD_TRANSACTION_MASS is the maximum mass allowed for transactions that
 /// are considered standard and will therefore be relayed and considered for mining.
@@ -44,18 +48,16 @@ pub fn calc_minimum_required_transaction_relay_fee(mass: u64) -> u64 {
 }
 
 /// is_transaction_output_dust returns whether or not the passed transaction output
-/// amount is considered dust or not based on the configured minimum transaction
-/// relay fee.
+/// amount is considered dust or not based on the wallet's legacy dust heuristic.
 ///
-/// Dust is defined in terms of the minimum transaction relay fee. In particular,
-/// if the cost to the network to spend coins is more than 1/3 of the minimum
-/// transaction relay fee, it is considered dust.
+/// Dust is defined in terms of the legacy dust fee ratio. In particular, if the
+/// estimated cost to spend coins is more than 1/3 of the threshold, it is
+/// considered dust.
 ///
-/// It is exposed by `MiningManager` for use by transaction generators and wallets.
+/// TODO(post-toccata): review this wallet-side dust helper against the updated mempool
+/// standardness policy. Mempool no longer rejects dust by threshold, but wallet generation
+/// may still want a local small-output/change-disposal heuristic.
 pub fn is_transaction_output_dust(transaction_output: &TransactionOutput) -> bool {
-    // TODO(post-toccata): review this wallet-side dust helper against the updated mempool
-    // standardness policy. Mempool no longer rejects dust by threshold, but wallet generation
-    // may still want a local small-output/change-disposal heuristic.
     // TODO: call script engine when available
     // if txscript.is_unspendable(transaction_output.script_public_key.script()) {
     //     return true
@@ -84,15 +86,12 @@ pub fn is_transaction_output_dust(transaction_output: &TransactionOutput) -> boo
     // that figure is used.
     let total_serialized_size = transaction_output_serialized_byte_size(transaction_output) + 148;
 
-    // The output is considered dust if the cost to the network to spend the
-    // coins is more than 1/3 of the minimum free transaction relay fee.
-    // mp.config.MinimumRelayTransactionFee is in sompi/KB, so multiply
-    // by 1000 to convert to bytes.
+    // The output is considered dust if the estimated cost to spend the
+    // coins is more than 1/3 of the legacy dust threshold.
     //
     // Using the typical values for a pay-to-pubkey transaction from
-    // the breakdown above and the default minimum free transaction relay
-    // fee of 1000, this equates to values less than 546 sompi being
-    // considered dust.
+    // the breakdown above and the legacy dust fee of 1000, this equates
+    // to values less than 546 sompi being considered dust.
     //
     // The following is equivalent to (value/total_serialized_size) * (1/3) * 1000
     // without needing to do floating point math.
@@ -101,8 +100,8 @@ pub fn is_transaction_output_dust(transaction_output: &TransactionOutput) -> boo
     // are considered to avoid overflowing.
     let value = transaction_output.value;
     match value.checked_mul(1000) {
-        Some(value_1000) => value_1000 / (3 * total_serialized_size) < MINIMUM_RELAY_TRANSACTION_FEE,
-        None => (value as u128 * 1000 / (3 * total_serialized_size as u128)) < MINIMUM_RELAY_TRANSACTION_FEE as u128,
+        Some(value_1000) => value_1000 / (3 * total_serialized_size) < DUST_RELAY_TRANSACTION_FEE,
+        None => (value as u128 * 1000 / (3 * total_serialized_size as u128)) < DUST_RELAY_TRANSACTION_FEE as u128,
     }
 }
 
@@ -114,8 +113,8 @@ pub const STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X: u64 = STANDARD_OUTPUT_SIZE_PL
 
 // pub fn is_standard_output_amount_dust(value: u64) -> bool {
 //     match value.checked_mul(1000) {
-//         Some(value_1000) => value_1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X < MINIMUM_RELAY_TRANSACTION_FEE,
-//         None => (value as u128 * 1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X as u128) < MINIMUM_RELAY_TRANSACTION_FEE as u128,
+//         Some(value_1000) => value_1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X < DUST_RELAY_TRANSACTION_FEE,
+//         None => (value as u128 * 1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X as u128) < DUST_RELAY_TRANSACTION_FEE as u128,
 //     }
 // }
 
@@ -125,8 +124,8 @@ pub const STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X: u64 = STANDARD_OUTPUT_SIZE_PL
 //     //     return value < dust_threshold_sompi;
 //     // } else {
 //     match value.checked_mul(1000) {
-//         Some(value_1000) => value_1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X < MINIMUM_RELAY_TRANSACTION_FEE,
-//         None => (value as u128 * 1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X as u128) < MINIMUM_RELAY_TRANSACTION_FEE as u128,
+//         Some(value_1000) => value_1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X < DUST_RELAY_TRANSACTION_FEE,
+//         None => (value as u128 * 1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X as u128) < DUST_RELAY_TRANSACTION_FEE as u128,
 //     }
 //     // }
 // }
@@ -231,8 +230,8 @@ impl MassCalculator {
 
     pub fn is_dust(&self, value: u64) -> bool {
         match value.checked_mul(1000) {
-            Some(value_1000) => value_1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X < MINIMUM_RELAY_TRANSACTION_FEE,
-            None => (value as u128 * 1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X as u128) < MINIMUM_RELAY_TRANSACTION_FEE as u128,
+            Some(value_1000) => value_1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X < DUST_RELAY_TRANSACTION_FEE,
+            None => (value as u128 * 1000 / STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X as u128) < DUST_RELAY_TRANSACTION_FEE as u128,
         }
     }
 
@@ -291,7 +290,7 @@ impl MassCalculator {
     // provisional
     #[inline(always)]
     pub fn calc_fee_for_mass(&self, mass: u64) -> u64 {
-        mass
+        self.calc_minimum_transaction_fee_from_mass(mass)
     }
 
     pub fn combine_mass(&self, compute_mass: u64, storage_mass: u64) -> u64 {

@@ -2,7 +2,7 @@
 
 use crate::error::Error;
 use crate::result::Result;
-use crate::tx::{Fees, MassCalculator, PaymentDestination};
+use crate::tx::{Fees, MassCalculator, PaymentDestination, STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X};
 use crate::utxo::UtxoEntryReference;
 use crate::{tx::PaymentOutputs, utils::kaspa_to_sompi};
 use kaspa_addresses::Address;
@@ -220,6 +220,9 @@ where
 
     assert_eq!(pt.inner.mass, calculated_mass, "pending transaction mass does not match calculated mass");
 
+    let is_acceptable_change_disposal =
+        |value| calc.is_dust(value) || value <= calc.calc_minimum_transaction_fee_from_mass(STANDARD_OUTPUT_SIZE_PLUS_INPUT_SIZE_3X);
+
     match expected.priority_fees {
         FeesExpected::Sender(priority_fees) => {
             let total_fees_expected = priority_fees + calculated_fees;
@@ -230,13 +233,12 @@ where
                 pt_fees
             );
 
-            // test that fee difference is below dust value as this condition can
-            // occur if a dust output has been consumed to fees, resulting in
-            // mismatch between calculated fees and PT fees
-            let dust_disposal_fees = pt_fees - total_fees_expected;
-            if !calc.is_dust(dust_disposal_fees) {
+            // Test that fee difference is small enough to be consumed as change disposal,
+            // either by legacy dust policy or by current relay-fee cost of preserving it.
+            let change_disposal_fees = pt_fees - total_fees_expected;
+            if !is_acceptable_change_disposal(change_disposal_fees) {
                 panic!(
-                    "[Fees SENDER] dust_disposal_fees test failure - pt fees: {pt_fees}  expected fees: {total_fees_expected} difference: {dust_disposal_fees}"
+                    "[Fees SENDER] change_disposal_fees test failure - pt fees: {pt_fees}  expected fees: {total_fees_expected} difference: {change_disposal_fees}"
                 );
             }
 
@@ -255,13 +257,12 @@ where
                 pt_fees
             );
 
-            // test that fee difference is below dust value as this condition can
-            // occur if a dust output has been consumed to fees, resulting in
-            // mismatch between calculated fees and PT fees
-            let dust_disposal_fees = pt_fees - total_fees_expected;
-            if !calc.is_dust(dust_disposal_fees) {
+            // Test that fee difference is small enough to be consumed as change disposal,
+            // either by legacy dust policy or by current relay-fee cost of preserving it.
+            let change_disposal_fees = pt_fees - total_fees_expected;
+            if !is_acceptable_change_disposal(change_disposal_fees) {
                 panic!(
-                    "[Fees RECEIVER] dust_disposal_fees test failure - pt fees: {pt_fees}  expected fees: {total_fees_expected} difference: {dust_disposal_fees}"
+                    "[Fees RECEIVER] change_disposal_fees test failure - pt fees: {pt_fees}  expected fees: {total_fees_expected} difference: {change_disposal_fees}"
                 );
             }
 
@@ -274,13 +275,12 @@ where
         FeesExpected::None => {
             assert!(calculated_fees <= pt_fees, "total fees expected: {} is greater than PT fees: {}", calculated_fees, pt_fees);
 
-            // test that fee difference is below dust value as this condition can
-            // occur if a dust output has been consumed to fees, resulting in
-            // mismatch between calculated fees and PT fees
-            let dust_disposal_fees = pt_fees - calculated_fees;
-            if !calc.is_dust(dust_disposal_fees) {
+            // Test that fee difference is small enough to be consumed as change disposal,
+            // either by legacy dust policy or by current relay-fee cost of preserving it.
+            let change_disposal_fees = pt_fees - calculated_fees;
+            if !is_acceptable_change_disposal(change_disposal_fees) {
                 panic!(
-                    "[Fees NONE] dust_disposal_fees test failure - pt fees: {pt_fees}  calculated fees: {calculated_fees} difference: {dust_disposal_fees}"
+                    "[Fees NONE] change_disposal_fees test failure - pt fees: {pt_fees}  calculated fees: {calculated_fees} difference: {change_disposal_fees}"
                 );
             }
 
@@ -560,7 +560,7 @@ fn test_generator_compound_100k_random_transactions() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(0);
     let inputs: Vec<f64> = (0..100_000).map(|_| rng.gen_range(0.001..10.0)).collect();
     let total = inputs.iter().sum::<f64>();
-    let outputs = [(output_address, Kaspa(total - 10.0))];
+    let outputs = [(output_address, Kaspa(total - 1000.0))];
     generator(test_network_id(), &inputs, &[], None, Fees::sender(Kaspa(5.0)), outputs.as_slice())
         .unwrap()
         .harness()
@@ -657,7 +657,7 @@ fn test_generator_inputs_100_outputs_1_fees_exclude_success() -> Result<()> {
         .fetch(&Expected {
             is_final: true,
             input_count: 2,
-            aggregate_input_value: Sompi(999_99886576),
+            aggregate_input_value: Sompi(999_88657600),
             output_count: 2,
             // priority_fees: FeesExpected::sender(Kaspa(5.0)),
             priority_fees: FeesExpected::sender(Kaspa(0.0)),
@@ -697,7 +697,7 @@ fn test_generator_inputs_100_outputs_1_fees_include_success() -> Result<()> {
     .fetch(&Expected {
         is_final: true,
         input_count: 2,
-        aggregate_input_value: Sompi(99_99886576),
+        aggregate_input_value: Sompi(99_88657600),
         output_count: 1,
         priority_fees: FeesExpected::receiver(Kaspa(5.0)),
     })
@@ -748,7 +748,7 @@ fn test_generator_inputs_1k_outputs_2_fees_exclude() -> Result<()> {
         .fetch(&Expected {
             is_final: true,
             input_count: 11,
-            aggregate_input_value: Sompi(9009_98981896),
+            aggregate_input_value: Sompi(9008_98189600),
             output_count: 2,
             priority_fees: FeesExpected::receiver(Kaspa(5.0)),
         })
@@ -766,7 +766,7 @@ fn test_generator_inputs_32k_outputs_2_fees_exclude() -> Result<()> {
         &[],
         None,
         Fees::sender(Kaspa(10_000.0)),
-        [(output_address, Kaspa(f * 32_747.0 - 10_001.0))].as_slice(),
+        [(output_address, Kaspa(f * 32_747.0 - 10_500.0))].as_slice(),
     )
     .unwrap()
     .harness()

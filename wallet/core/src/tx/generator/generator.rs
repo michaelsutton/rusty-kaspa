@@ -1036,58 +1036,91 @@ impl Generator {
                     ..
                 } = data;
 
-                let change_output_value = change_output_value.unwrap_or(0);
-
-                let mut final_outputs = self.inner.final_transaction_outputs.clone();
-
-                if self.inner.final_transaction_priority_fee.receiver_pays() {
-                    let output = final_outputs.get_mut(0).expect("include fees requires one output");
-                    if aggregate_input_value < output.value {
-                        output.value = aggregate_input_value - transaction_fees;
-                    } else {
-                        output.value -= transaction_fees;
-                    }
-                }
-
-                let change_output_index = if change_output_value > 0 {
-                    let change_output_index = Some(final_outputs.len());
-                    final_outputs.push(TransactionOutput::new(change_output_value, pay_to_address_script(&self.inner.change_address)));
-                    change_output_index
-                } else {
-                    None
+                let initial_transaction_fees = transaction_fees;
+                let mut transaction_fees = transaction_fees;
+                let mut change_output_value = change_output_value.unwrap_or(0);
+                let priority_fees = match self.inner.final_transaction_priority_fee {
+                    Fees::SenderPays(priority_fees) | Fees::ReceiverPays(priority_fees) => priority_fees,
+                    Fees::None => 0,
                 };
 
-                let aggregate_output_value = final_outputs.iter().map(|output| output.value).sum::<u64>();
-                // TODO - validate that this is still correct
-                // `Fees::ReceiverPays` processing can result in outputs being larger than inputs
-                if aggregate_output_value > aggregate_input_value {
-                    return Err(Error::InsufficientFunds {
-                        additional_needed: aggregate_output_value - aggregate_input_value,
-                        origin: "final",
-                    });
-                }
+                // Final output values affect storage mass, and storage mass can raise the relay fee.
+                // Rebuild until the actual transaction mass is covered by the final fee/output split.
+                let (tx, transaction_mass, aggregate_output_value, change_output_index) = loop {
+                    let mut final_outputs = self.inner.final_transaction_outputs.clone();
 
-                let tx = Transaction::new(
-                    0,
-                    inputs,
-                    final_outputs,
-                    0,
-                    SUBNETWORK_ID_NATIVE,
-                    0,
-                    self.inner.final_transaction_payload.clone(),
-                );
+                    if self.inner.final_transaction_priority_fee.receiver_pays() {
+                        let output = final_outputs.get_mut(0).expect("include fees requires one output");
+                        if aggregate_input_value < output.value {
+                            if aggregate_input_value <= transaction_fees {
+                                return Err(Error::TransactionFeesAreTooHigh);
+                            }
+                            output.value = aggregate_input_value - transaction_fees;
+                        } else {
+                            output.value = output.value.checked_sub(transaction_fees).ok_or(Error::TransactionFeesAreTooHigh)?;
+                        }
+                    }
 
-                let transaction_mass = self.inner.mass_calculator.calc_overall_mass_for_unsigned_consensus_transaction(
-                    &tx,
-                    &utxo_entry_references,
-                    self.inner.minimum_signatures,
-                )?;
+                    let change_output_index = if change_output_value > 0 {
+                        let change_output_index = Some(final_outputs.len());
+                        final_outputs
+                            .push(TransactionOutput::new(change_output_value, pay_to_address_script(&self.inner.change_address)));
+                        change_output_index
+                    } else {
+                        None
+                    };
+
+                    let aggregate_output_value = final_outputs.iter().map(|output| output.value).sum::<u64>();
+                    // TODO - validate that this is still correct
+                    // `Fees::ReceiverPays` processing can result in outputs being larger than inputs
+                    if aggregate_output_value > aggregate_input_value {
+                        return Err(Error::InsufficientFunds {
+                            additional_needed: aggregate_output_value - aggregate_input_value,
+                            origin: "final",
+                        });
+                    }
+
+                    let tx = Transaction::new(
+                        0,
+                        inputs.clone(),
+                        final_outputs,
+                        0,
+                        SUBNETWORK_ID_NATIVE,
+                        0,
+                        self.inner.final_transaction_payload.clone(),
+                    );
+
+                    let transaction_mass = self.inner.mass_calculator.calc_overall_mass_for_unsigned_consensus_transaction(
+                        &tx,
+                        &utxo_entry_references,
+                        self.inner.minimum_signatures,
+                    )?;
+                    let required_transaction_fees = self.calc_fees_from_mass(transaction_mass) + priority_fees;
+                    if required_transaction_fees <= transaction_fees {
+                        break (tx, transaction_mass, aggregate_output_value, change_output_index);
+                    }
+
+                    let additional_fees = required_transaction_fees - transaction_fees;
+                    transaction_fees = required_transaction_fees;
+                    if change_output_value >= additional_fees {
+                        change_output_value -= additional_fees;
+                    } else {
+                        let additional_needed = additional_fees - change_output_value;
+                        change_output_value = 0;
+                        if self.inner.final_transaction_priority_fee.sender_pays() {
+                            return Err(Error::InsufficientFunds { additional_needed, origin: "final fees" });
+                        }
+                    }
+                };
+
                 if transaction_mass > MAXIMUM_STANDARD_TRANSACTION_MASS {
                     // this should never occur as we should not produce transactions higher than the mass limit
                     return Err(Error::MassCalculationError);
                 }
                 tx.set_mass(transaction_mass);
 
+                // The final fee loop may discover a higher required fee than the earlier stage estimate.
+                context.aggregate_fees += transaction_fees - initial_transaction_fees;
                 context.aggregate_mass += transaction_mass;
                 context.final_transaction_id = Some(tx.id());
                 context.number_of_stages += 1;
