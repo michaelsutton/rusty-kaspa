@@ -5,7 +5,7 @@ use itertools::Itertools;
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::{
     config::params::{TESTNET_PARAMS, TESTNET12_PARAMS},
-    constants::{SOMPI_PER_KASPA, TX_VERSION, TX_VERSION_TOCCATA},
+    constants::{SOMPI_PER_KASPA, TRANSIENT_BYTE_TO_MASS_FACTOR, TX_VERSION, TX_VERSION_TOCCATA},
     hashing::covenant_id::covenant_id,
     network::NetworkType,
     sign::sign,
@@ -30,7 +30,7 @@ use secp256k1::{
 use tokio::time::{Instant, MissedTickBehavior, interval};
 
 const DEFAULT_SEND_AMOUNT: u64 = 10 * SOMPI_PER_KASPA;
-const FEE_RATE: u64 = 10;
+const FEE_RATE: u64 = 101;
 const MILLIS_PER_TICK: u64 = 10;
 const ADDRESS_VERSION: Version = Version::PubKey;
 
@@ -577,12 +577,16 @@ fn clean_old_pending_outpoints(pending: &mut HashMap<TransactionOutpoint, Instan
     pending.retain(|_, &mut time| now.duration_since(time) <= Duration::from_secs(3600));
 }
 
-fn required_fee(num_utxos: usize, num_outs: u64) -> u64 {
-    FEE_RATE * estimated_mass(num_utxos, num_outs)
+fn required_fee(num_utxos: usize, num_outs: u64, payload_size: usize) -> u64 {
+    FEE_RATE * estimated_compute_mass(num_utxos, num_outs).max(estimated_transient_mass(num_utxos, num_outs, payload_size))
 }
 
-fn estimated_mass(num_utxos: usize, num_outs: u64) -> u64 {
+fn estimated_compute_mass(num_utxos: usize, num_outs: u64) -> u64 {
     200 + 34 * num_outs + 1000 * (num_utxos as u64)
+}
+
+fn estimated_transient_mass(num_utxos: usize, num_outs: u64, payload_size: usize) -> u64 {
+    (200 + 34 * num_outs + 1000 * (num_utxos as u64) + payload_size as u64) * TRANSIENT_BYTE_TO_MASS_FACTOR
 }
 
 fn apply_random_covenant_binding_from_inputs(tx: &mut MutableTransaction<Transaction>, with_covenant_id: bool) {
@@ -679,7 +683,7 @@ fn select_utxos(
         selected_amount += entry.amount;
         selected.push((outpoint, entry));
 
-        let fee = required_fee(selected.len(), num_outs);
+        let fee = required_fee(selected.len(), num_outs, tx_config.payload_size);
         let priority_fee = if tx_config.randomize_fee && tx_config.priority_fee > 0 {
             rng.gen_range(0..tx_config.priority_fee)
         } else {
