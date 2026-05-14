@@ -29,7 +29,12 @@ impl HeaderProcessor {
     }
 
     fn check_header_version(&self, header: &Header) -> BlockProcessResult<()> {
-        if header.version != constants::BLOCK_VERSION {
+        let allowed_version = if self.covenants_activation.is_active(header.daa_score) {
+            constants::TOCCATA_BLOCK_VERSION
+        } else {
+            constants::BLOCK_VERSION
+        };
+        if header.version != allowed_version {
             return Err(RuleError::WrongBlockVersion(header.version));
         }
         Ok(())
