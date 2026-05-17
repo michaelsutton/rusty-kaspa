@@ -1,7 +1,6 @@
 use std::{fs, path::PathBuf, process::exit, sync::Arc, time::Duration};
 
 use async_channel::unbounded;
-use kaspa_build_info::git;
 use kaspa_consensus_core::{
     config::ConfigBuilder,
     constants::TRANSIENT_BYTE_TO_MASS_FACTOR,
@@ -68,6 +67,23 @@ const DEFAULT_DATA_DIR: &str = "datadir";
 const CONSENSUS_DB: &str = "consensus";
 const UTXOINDEX_DB: &str = "utxoindex";
 const META_DB: &str = "meta";
+
+#[derive(Clone, Debug)]
+pub struct BuildInfo {
+    pub git_hash: Option<Vec<u8>>,
+    pub git_short_hash: Option<Vec<u8>>,
+    pub version: String,
+}
+
+impl BuildInfo {
+    pub fn new(git_hash: Option<Vec<u8>>, git_short_hash: Option<Vec<u8>>, version: String) -> Self {
+        Self { git_hash, git_short_hash, version }
+    }
+
+    pub fn package() -> Self {
+        Self::new(None, None, format!("v{}", version()))
+    }
+}
 const META_DB_FILE_LIMIT: i32 = 5;
 const DEFAULT_LOG_DIR: &str = "logs";
 
@@ -213,6 +229,11 @@ pub fn create_core(args: Args, fd_total_budget: i32) -> (Arc<Core>, Arc<RpcCoreS
     create_core_with_runtime(&rt, &args, fd_total_budget)
 }
 
+pub fn create_core_with_build_info(args: Args, fd_total_budget: i32, build_info: BuildInfo) -> (Arc<Core>, Arc<RpcCoreService>) {
+    let rt = Runtime::from_args(&args);
+    create_core_with_runtime_and_build_info(&rt, &args, fd_total_budget, build_info)
+}
+
 /// Configure RocksDB parameters from CLI arguments.
 ///
 /// Returns: (preset, cache_budget, wal_directory)
@@ -275,6 +296,15 @@ fn configure_rocksdb(args: &Args) -> (RocksDbPreset, Option<usize>, Option<PathB
 /// (dropped) before the `Core` is shut down.
 ///
 pub fn create_core_with_runtime(runtime: &Runtime, args: &Args, fd_total_budget: i32) -> (Arc<Core>, Arc<RpcCoreService>) {
+    create_core_with_runtime_and_build_info(runtime, args, fd_total_budget, BuildInfo::package())
+}
+
+pub fn create_core_with_runtime_and_build_info(
+    runtime: &Runtime,
+    args: &Args,
+    fd_total_budget: i32,
+    build_info: BuildInfo,
+) -> (Arc<Core>, Arc<RpcCoreService>) {
     let network = args.network();
 
     // TODO(pre-covpp): Remove this log when Toccata activation DAA score is finalized on mainnet.
@@ -334,7 +364,7 @@ pub fn create_core_with_runtime(runtime: &Runtime, args: &Args, fd_total_budget:
     let db_dir = app_dir.join(network.to_prefixed()).join(DEFAULT_DATA_DIR);
 
     // Print package name and version
-    info!("{} v{}", env!("CARGO_PKG_NAME"), git::with_short_hash(version()));
+    info!("{} {}", env!("CARGO_PKG_NAME"), build_info.version);
 
     assert!(!db_dir.to_str().unwrap().is_empty());
     info!("Application directory: {}", app_dir.display());
@@ -617,7 +647,7 @@ Do you confirm? (y/n)";
         Arc::new(perf_monitor_builder.build())
     };
 
-    let system_info = SystemInfo::new(git::hash(), git::short_hash(), git::version());
+    let system_info = SystemInfo::new(build_info.git_hash, build_info.git_short_hash, build_info.version);
 
     let notify_service = Arc::new(NotifyService::new(notification_root.clone(), notification_recv, subscription_context.clone()));
     let index_service: Option<Arc<IndexService>> = if args.utxoindex {

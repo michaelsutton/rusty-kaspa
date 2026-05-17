@@ -11,12 +11,19 @@ pub(crate) struct InProcessNode {
 
 impl InProcessNode {
     pub(crate) fn start_from_args(args: kaspad_args::Args) -> Result<Self, anyhow::Error> {
+        Self::start_from_args_with_build_info(args, kaspad_daemon::BuildInfo::package())
+    }
+
+    pub(crate) fn start_from_args_with_build_info(
+        args: kaspad_args::Args,
+        build_info: kaspad_daemon::BuildInfo,
+    ) -> Result<Self, anyhow::Error> {
         let _ = fd_budget::try_set_fd_limit(kaspad_daemon::DESIRED_DAEMON_SOFT_FD_LIMIT);
 
         let runtime = kaspad_daemon::Runtime::from_args(&args);
         let fd_total_budget =
             fd_budget::limit() - args.rpc_max_clients as i32 - args.inbound_limit as i32 - args.outbound_target as i32;
-        let (core, _) = kaspad_daemon::create_core_with_runtime(&runtime, &args, fd_total_budget);
+        let (core, _) = kaspad_daemon::create_core_with_runtime_and_build_info(&runtime, &args, fd_total_budget, build_info);
         let workers = core.start();
         Ok(Self { core, workers })
     }

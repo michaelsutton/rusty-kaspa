@@ -1,8 +1,11 @@
 use clap::{Arg, ArgAction, Command, arg};
+#[cfg(feature = "git-hash")]
+use kaspa_build_info::git;
 use kaspa_consensus_core::{
     config::Config,
     network::{NetworkId, NetworkType},
 };
+#[cfg(not(feature = "git-hash"))]
 use kaspa_core::kaspad_env::version;
 use kaspa_notify::address::tracker::Tracker;
 use kaspa_p2p_flows::user_agent_rule::UserAgentRule;
@@ -21,6 +24,17 @@ use kaspa_consensus_core::tx::{TransactionOutpoint, UtxoEntry};
 use kaspa_txscript::pay_to_address_script;
 #[cfg(feature = "devnet-prealloc")]
 use std::sync::Arc;
+
+fn display_version() -> String {
+    #[cfg(feature = "git-hash")]
+    {
+        git::version()
+    }
+    #[cfg(not(feature = "git-hash"))]
+    {
+        format!("v{}", version())
+    }
+}
 
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
@@ -216,11 +230,12 @@ impl Args {
 
 pub fn cli() -> Command {
     let defaults: Args = Default::default();
+    let display_version = display_version();
 
     #[allow(clippy::let_and_return)]
     let cmd = Command::new("kaspad")
-        .about(format!("{} (rusty-kaspa) v{}", env!("CARGO_PKG_DESCRIPTION"), version()))
-        .version(env!("CARGO_PKG_VERSION"))
+        .about(format!("{} (rusty-kaspa) {}", env!("CARGO_PKG_DESCRIPTION"), display_version))
+        .version(display_version)
         .arg(arg!(-C --configfile <CONFIG_FILE> "Path of config file.").env("KASPAD_CONFIGFILE"))
         .arg(arg!(-b --appdir <DATA_DIR> "Directory to store data.").env("KASPAD_APPDIR"))
         .arg(arg!(--logdir <LOG_DIR> "Directory to log output.").env("KASPAD_LOGDIR"))
@@ -474,10 +489,7 @@ a large RAM (~64GB) can set this value to ~3.0-4.0 and gain superior performance
 pub fn parse_args() -> Args {
     match Args::parse(std::env::args_os()) {
         Ok(args) => args,
-        Err(err) => {
-            println!("{err}");
-            std::process::exit(1);
-        }
+        Err(err) => err.exit(),
     }
 }
 

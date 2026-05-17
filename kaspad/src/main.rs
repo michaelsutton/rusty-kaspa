@@ -5,11 +5,13 @@ extern crate kaspa_hashes;
 use std::sync::Arc;
 
 use kaspa_alloc::init_allocator_with_default_settings;
+#[cfg(feature = "git-hash")]
+use kaspa_build_info::git;
 use kaspa_core::{info, signals::Signals};
 use kaspa_utils::fd_budget;
 use kaspad_lib::{
     args::parse_args,
-    daemon::{DESIRED_DAEMON_SOFT_FD_LIMIT, MINIMUM_DAEMON_SOFT_FD_LIMIT, create_core},
+    daemon::{BuildInfo, DESIRED_DAEMON_SOFT_FD_LIMIT, MINIMUM_DAEMON_SOFT_FD_LIMIT, create_core_with_build_info},
 };
 
 #[cfg(feature = "heap")]
@@ -40,11 +42,21 @@ pub fn main() {
     }
 
     let fd_total_budget = fd_budget::limit() - args.rpc_max_clients as i32 - args.inbound_limit as i32 - args.outbound_target as i32;
-    let (core, _) = create_core(args, fd_total_budget);
+    let (core, _) = create_core_with_build_info(args, fd_total_budget, build_info());
 
     // Bind the keyboard signal to the core
     Arc::new(Signals::new(&core)).init();
 
     core.run();
     info!("Kaspad has stopped...");
+}
+
+#[cfg(feature = "git-hash")]
+fn build_info() -> BuildInfo {
+    BuildInfo::new(git::hash(), git::short_hash(), git::version())
+}
+
+#[cfg(not(feature = "git-hash"))]
+fn build_info() -> BuildInfo {
+    BuildInfo::package()
 }

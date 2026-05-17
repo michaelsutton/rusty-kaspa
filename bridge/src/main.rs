@@ -1,4 +1,7 @@
+#[cfg(not(feature = "git-hash"))]
 use clap::Parser;
+#[cfg(feature = "git-hash")]
+use clap::{CommandFactory, FromArgMatches};
 use futures_util::future::try_join_all;
 use kaspa_alloc::init_allocator_with_default_settings;
 use kaspa_stratum_bridge::log_colors::LogColors;
@@ -16,7 +19,10 @@ use tracing_subscriber::EnvFilter;
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::{CTRL_C_EVENT, SetConsoleCtrlHandler};
 
+#[cfg(feature = "git-hash")]
+use kaspa_build_info::git;
 use kaspad_lib::args as kaspad_args;
+use kaspad_lib::daemon as kaspad_daemon;
 
 mod app_dirs;
 mod cli;
@@ -179,7 +185,7 @@ fn log_bridge_configuration(config: &BridgeConfig) {
 async fn main() -> Result<(), anyhow::Error> {
     init_allocator_with_default_settings();
 
-    let cli = Cli::parse();
+    let cli = parse_cli();
 
     // Single-config model: default to `config.yaml` for both mainnet and testnet runs.
     // `--testnet` affects the network behavior, but does not imply a different config file.
@@ -256,7 +262,7 @@ async fn main() -> Result<(), anyhow::Error> {
         argv.push(OsString::from("kaspad"));
         argv.extend(node_args.iter().map(OsString::from));
         let args = kaspad_args::Args::parse(argv).map_err(|e| anyhow::anyhow!("{}", e))?;
-        inprocess_node = Some(InProcessNode::start_from_args(args)?);
+        inprocess_node = Some(InProcessNode::start_from_args_with_build_info(args, build_info())?);
     }
 
     // Install our handler after the embedded node starts (if inprocess) so we run first (Windows calls handlers LIFO).
@@ -531,4 +537,25 @@ async fn main() -> Result<(), anyhow::Error> {
             }
         }
     }
+}
+
+#[cfg(feature = "git-hash")]
+fn build_info() -> kaspad_daemon::BuildInfo {
+    kaspad_daemon::BuildInfo::new(git::hash(), git::short_hash(), git::version())
+}
+
+#[cfg(not(feature = "git-hash"))]
+fn build_info() -> kaspad_daemon::BuildInfo {
+    kaspad_daemon::BuildInfo::package()
+}
+
+#[cfg(feature = "git-hash")]
+fn parse_cli() -> Cli {
+    let matches = Cli::command().version(git::version()).get_matches();
+    Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
+}
+
+#[cfg(not(feature = "git-hash"))]
+fn parse_cli() -> Cli {
+    Cli::parse()
 }

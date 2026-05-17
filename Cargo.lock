@@ -3724,6 +3724,7 @@ dependencies = [
  "include_dir",
  "kaspa-addresses",
  "kaspa-alloc",
+ "kaspa-build-info",
  "kaspa-consensus-core",
  "kaspa-core",
  "kaspa-grpc-client",

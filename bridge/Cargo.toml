@@ -21,6 +21,7 @@ kaspa-grpc-client = { workspace = true }
 kaspa-notify = { workspace = true }
 kaspa-core = { workspace = true }
 kaspa-utils = { workspace = true }
+kaspa-build-info = { workspace = true, optional = true }
 kaspad = { workspace = true }
 kaspa-alloc = { workspace = true }
 dirs = { workspace = true }
@@ -73,6 +74,7 @@ name = "stratum-bridge"
 path = "src/main.rs"
 
 [features]
+git-hash = ["dep:kaspa-build-info"]
 rkstratum_cpu_miner = []
 
 [lints]
