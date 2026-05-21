@@ -119,7 +119,7 @@ mod tests {
     };
     use ark_bn254::{Bn254, G1Affine, G2Affine};
     use ark_groth16::VerifyingKey;
-    use ark_serialize::{CanonicalSerialize, Compress};
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
     use kaspa_consensus_core::mass::ScriptUnits;
     use kaspa_txscript_errors::TxScriptError;
 
@@ -155,6 +155,24 @@ mod tests {
         let mut bytes = Vec::new();
         vk.serialize_compressed(&mut bytes).expect("serialize VK");
         bytes
+    }
+
+    #[test]
+    fn custom_vk_deserialize_matches_ark() {
+        for &gamma_abc_count in &[1usize, 2, 6, 42] {
+            let vk_bytes = vk_with_gamma_abc_count(gamma_abc_count);
+            let ark_vk = VerifyingKey::<Bn254>::deserialize_compressed(&*vk_bytes).expect("Ark should deserialize VK");
+
+            let mut meter = RuntimeResourceMeter::new_script_units(ScriptUnits(0), ScriptUnits(u64::MAX));
+            let custom_vk = super::deserialize_verifying_key_with_metering(&vk_bytes, gamma_abc_count - 1, &mut meter)
+                .expect("custom VK deserializer should match Ark");
+
+            assert_eq!(
+                meter.used_script_units(),
+                ScriptUnits((gamma_abc_count as u64).saturating_mul(GROTH16_GAMMA_ABC_G1_ELEMENT_SCRIPT_UNITS))
+            );
+            assert_eq!(custom_vk, ark_vk);
+        }
     }
 
     #[test]
