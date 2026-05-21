@@ -1,4 +1,5 @@
 use crate::{
+    EngineFlags,
     data_stack::Stack,
     runtime_resource_meter::RuntimeResourceMeter,
     zk_precompiles::{
@@ -80,7 +81,7 @@ impl ZkPrecompile for R0SuccinctPrecompile {
     /// - control inclusion proof digests (bytes)
     /// - control index (bytes, u32 le)
     /// - claim (bytes)
-    fn verify_zk(dstack: &mut Stack, _meter: &mut RuntimeResourceMeter) -> Result<(), Self::Error> {
+    fn verify_zk(dstack: &mut Stack, _meter: &mut RuntimeResourceMeter, flags: EngineFlags) -> Result<(), Self::Error> {
         let [claim, control_index, control_digests, seal, journal, image_id, control_id, hashfn] = dstack.pop_raw()?;
 
         let control_id = parse_digest(control_id)?;
@@ -88,8 +89,8 @@ impl ZkPrecompile for R0SuccinctPrecompile {
         let claim = parse_digest(claim)?;
         let hashfn = parse_hashfn(hashfn)?;
 
-        // For now we only support the poseidon2 hashfn
-        if hashfn != HashFnId::Poseidon2 {
+        // Post-activation we restrict the hashfn to Poseidon2 only.
+        if flags.zk_hardening_enabled && hashfn != HashFnId::Poseidon2 {
             return Err(R0Error::UnsupportedHashFn(hashfn));
         }
 
