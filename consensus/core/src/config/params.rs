@@ -821,6 +821,8 @@ pub const SIMNET_PARAMS: Params = Params {
     pruning_proof_m: PRUNING_PROOF_M,
 
     // For simnet, keep a compact 10 BPS pruning/finality profile for mempool benchmarks.
+    // The delayed Toccata activation lets benchmark warm-up cross pruning point movements
+    // before submitting post-Toccata transactions.
     blockrate: BlockrateParams {
         target_time_per_block: TenBps::target_time_per_block(),
         ghostdag_k: TenBps::ghostdag_k(),
@@ -837,7 +839,7 @@ pub const SIMNET_PARAMS: Params = Params {
     pre_crescendo_target_time_per_block: TenBps::target_time_per_block(),
 
     crescendo_activation: ForkActivation::always(),
-    toccata_activation: ForkActivation::always(),
+    toccata_activation: ForkActivation::new(6_000),
 };
 
 pub const DEVNET_PARAMS: Params = Params {

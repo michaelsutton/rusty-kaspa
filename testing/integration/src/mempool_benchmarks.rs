@@ -34,6 +34,7 @@ use kaspa_notify::{
     listener::ListenerId,
     scope::{NewBlockTemplateScope, Scope},
 };
+use kaspa_rpc_core::SubmitBlockReport;
 use kaspa_rpc_core::{Notification, RpcError, api::rpc::RpcApi};
 use kaspa_txscript::{
     EngineCtx, EngineFlags, TxScriptEngine, caches::Cache, extract_script_pub_key_address, opcodes::codes::OpZkPrecompile,
@@ -55,6 +56,34 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::join;
+
+async fn mine_until_daa_score(
+    client_manager: Arc<ClientManager>,
+    network: kaspa_consensus_core::network::NetworkId,
+    target_daa_score: u64,
+) {
+    let client = client_manager.new_client().await;
+    let (_, pk) = secp256k1::generate_keypair(&mut thread_rng());
+    let pay_address =
+        Address::new(network.network_type().into(), kaspa_addresses::Version::PubKey, &pk.x_only_public_key().0.serialize());
+
+    loop {
+        let virtual_daa_score = client.get_server_info().await.unwrap().virtual_daa_score;
+        if virtual_daa_score >= target_daa_score {
+            info!("Reached target DAA score {virtual_daa_score}");
+            break;
+        }
+        if virtual_daa_score % 500 == 0 {
+            info!("Mining warm-up blocks: DAA score {virtual_daa_score}/{target_daa_score}");
+        }
+
+        let template = client.get_block_template(pay_address.clone(), vec![]).await.unwrap();
+        let response = client.submit_block(template.block, false).await.unwrap();
+        assert_eq!(response.report, SubmitBlockReport::Success);
+    }
+
+    client.disconnect().await.unwrap();
+}
 
 /// Run this benchmark with the following command line:
 /// `cargo test --release --package kaspa-testing-integration --lib --features devnet-prealloc -- mempool_benchmarks::bench_bbt_latency --exact --nocapture --ignored`
@@ -454,9 +483,14 @@ async fn bench_bbt_latency_lanes() {
     info!("Generated {} txs using {} random lane ids per level and {} gas per tx", txs.len(), TX_LANES_PER_LEVEL, TX_GAS);
 
     let client_manager = Arc::new(ClientManager::new(args));
-    let mut tasks = TasksRunner::new(Some(DaemonTask::build(client_manager.clone())))
-        .launch()
-        .await
+    let tasks = TasksRunner::new(Some(DaemonTask::build(client_manager.clone()))).launch().await;
+
+    // Warm up through the delayed activation point before submitting post-Toccata
+    // lane txs, so activation occurs after the compact simnet pruning profile
+    // has moved the pruning point a few times.
+    mine_until_daa_score(client_manager.clone(), network, params.toccata_activation.daa_score()).await;
+
+    let mut tasks = tasks
         .task(
             MinerGroupTask::build(network, client_manager.clone(), SUBMIT_BLOCK_CLIENTS, params.bps(), BLOCK_COUNT, Stopper::Signal)
                 .await,
