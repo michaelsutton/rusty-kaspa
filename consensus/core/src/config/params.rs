@@ -820,8 +820,19 @@ pub const SIMNET_PARAMS: Params = Params {
     max_block_level: 250,
     pruning_proof_m: PRUNING_PROOF_M,
 
-    // For simnet, we deviate from default 10BPS configuration and allow at least 64 parents in order to support mempool benchmarks out of the box
-    blockrate: BlockrateParams::new::<10>().increase_max_block_parents(64),
+    // For simnet, keep a compact 10 BPS pruning/finality profile for mempool benchmarks.
+    blockrate: BlockrateParams {
+        target_time_per_block: TenBps::target_time_per_block(),
+        ghostdag_k: TenBps::ghostdag_k(),
+        past_median_time_sample_rate: TenBps::past_median_time_sample_rate(),
+        difficulty_sample_rate: TenBps::difficulty_adjustment_sample_rate(),
+        max_block_parents: 64,
+        mergeset_size_limit: TenBps::mergeset_size_limit(),
+        merge_depth: 600,
+        finality_depth: 1_200,
+        pruning_depth: 3_000,
+        coinbase_maturity: TenBps::coinbase_maturity(),
+    },
 
     pre_crescendo_target_time_per_block: TenBps::target_time_per_block(),
 

@@ -11,7 +11,7 @@ use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspa_wrpc_server::address::WrpcNetAddress;
 use kaspad_lib::{args::Args, daemon::create_core_with_runtime};
 use parking_lot::RwLock;
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{ops::Deref, path::Path, sync::Arc, time::Duration};
 use tempfile::TempDir;
 
 pub struct ClientManager {
@@ -110,7 +110,7 @@ pub struct Daemon {
     shutdown_requested: Listener,
     workers: Option<Vec<std::thread::JoinHandle<()>>>,
 
-    _appdir_tempdir: TempDir,
+    _appdir_tempdir: Option<TempDir>,
 }
 
 fn free_port() -> u16 {
@@ -153,8 +153,15 @@ impl Daemon {
     }
 
     pub fn with_manager(client_manager: Arc<ClientManager>, fd_total_budget: i32) -> Daemon {
-        let appdir_tempdir = get_kaspa_tempdir();
-        client_manager.args.write().appdir = Some(appdir_tempdir.path().to_str().unwrap().to_owned());
+        let appdir_tempdir = if client_manager.args.read().appdir.is_some() {
+            let appdir = client_manager.args.read().appdir.clone().unwrap();
+            std::fs::create_dir_all(Path::new(&appdir)).unwrap();
+            None
+        } else {
+            let appdir_tempdir = get_kaspa_tempdir();
+            client_manager.args.write().appdir = Some(appdir_tempdir.path().to_str().unwrap().to_owned());
+            Some(appdir_tempdir)
+        };
         let (core, _) = create_core_with_runtime(&Default::default(), &client_manager.args.read(), fd_total_budget);
         let async_service = &Arc::downcast::<AsyncRuntime>(core.find(AsyncRuntime::IDENT).unwrap().into_any_arc()).unwrap();
         let rpc_core_service =

@@ -47,6 +47,7 @@ use rand::thread_rng;
 use rand_distr::{Distribution, Exp};
 use std::{
     cmp::max,
+    path::Path,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -399,12 +400,15 @@ async fn bench_bbt_latency_2() {
 #[tokio::test]
 #[ignore = "bmk"]
 async fn bench_bbt_latency_lanes() {
-    kaspa_core::log::try_init_logger("info,kaspa_core::time=debug,kaspa_mining::monitor=debug");
+    const APPDIR: &str = "/tmp/rusty-kaspa-mempool-bmk";
+    let logdir = Path::new(APPDIR).join("kaspa-simnet/logs");
+    std::fs::create_dir_all(&logdir).unwrap();
+    kaspa_core::log::init_logger(Some(logdir.to_str().unwrap()), "info,kaspa_core::time=debug,kaspa_mining::monitor=debug");
     kaspa_core::panic::configure_panic();
 
     const BLOCK_COUNT: usize = usize::MAX;
     const MEMPOOL_TARGET: u64 = 600_000;
-    const TX_COUNT: usize = 1_200_000;
+    const TX_COUNT: usize = 10_200_000;
     const TX_LEVEL_WIDTH: usize = 6_000;
     const TX_LANES_PER_LEVEL: usize = 200;
     const TX_GAS: u64 = DEFAULT_GAS_PER_LANE_LIMIT / 2;
@@ -425,6 +429,12 @@ async fn bench_bbt_latency_lanes() {
     let args = ArgsBuilder::simnet(TX_LEVEL_WIDTH as u64 * CONTRACT_FACTOR, 500)
         .prealloc_address(prealloc_address.clone())
         .apply_args(Daemon::fill_args_with_random_ports)
+        .apply_args(|args| {
+            args.appdir = Some(APPDIR.to_owned());
+            args.logdir = Some(logdir.to_string_lossy().to_string());
+            args.no_log_files = false;
+            args.reset_db = true;
+        })
         .build();
 
     let network = args.network();
