@@ -17,6 +17,12 @@ use {
     params::Params,
 };
 
+/// Default wall-clock cap for the steady-state pruning-point full UTXO-commitment read-back cadence (24 hours).
+pub const DEFAULT_PRUNING_FULL_READBACK_INTERVAL_SECS: u64 = 24 * 60 * 60;
+
+/// Maximum operator-tunable wall-clock cap for the pruning-point full UTXO-commitment read-back cadence (48 hours).
+pub const MAX_PRUNING_FULL_READBACK_INTERVAL_SECS: u64 = 48 * 60 * 60;
+
 /// Various consensus configurations all bundled up under a single struct. Use `Config::new` for directly building from
 /// a `Params` instance. For anything more complex it is recommended to use `ConfigBuilder`. NOTE: this struct can be
 /// implicitly de-refed into `Params`
@@ -74,6 +80,15 @@ pub struct Config {
 
     /// The number of days to keep data for
     pub retention_period_days: Option<f64>,
+
+    /// Run the full O(n) pruning-point UTXO-commitment read-back on every pruning cycle (operator opt-in via
+    /// `--sanity`, and set by the storage-surgery / early-mainnet validation window). Independent of
+    /// `enable_sanity_checks`: the incremental O(1) commitment guard is always-on regardless of this flag.
+    pub pruning_full_readback_every_cycle: bool,
+
+    /// Wall-clock cap (seconds) for the steady-state pruning-point full read-back cadence: the read-back runs at
+    /// least once per this interval even if the fixed cycle count has not been reached. Operator-tunable.
+    pub pruning_full_readback_interval_secs: u64,
 }
 
 impl Config {
@@ -103,6 +118,8 @@ impl Config {
             disable_upnp: false,
             ram_scale: 1.0,
             retention_period_days: None,
+            pruning_full_readback_every_cycle: false,
+            pruning_full_readback_interval_secs: DEFAULT_PRUNING_FULL_READBACK_INTERVAL_SECS,
         }
     }
 

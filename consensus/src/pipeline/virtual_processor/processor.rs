@@ -60,6 +60,7 @@ use kaspa_consensus_core::{
     header::Header,
     merkle::calc_hash_merkle_root,
     mining_rules::MiningRules,
+    muhash::MuHashExtensions,
     pruning::PruningPointsList,
     tx::{MutableTransaction, Transaction},
     utxo::{
@@ -1573,6 +1574,14 @@ impl VirtualStateProcessor {
             let mut batch = WriteBatch::default();
             let mut pruning_meta_write = self.pruning_meta_stores.write();
             pruning_meta_write.set_utxoset_position(&mut batch, new_pruning_point).unwrap();
+            // Seed the incrementally-maintained pruning-point MuHash from a read-back of the WRITTEN snapshot set
+            // (storage truth), not the imported stream multiset, so the maintained value reflects persisted state.
+            // Persisted in the same batch as the position so the two are crash-consistent.
+            let mut seed = MuHash::new();
+            for (outpoint, entry) in pruning_meta_write.utxo_set.iterator().map(|iter_result| iter_result.unwrap()) {
+                seed.add_utxo(&outpoint, &entry);
+            }
+            pruning_meta_write.set_pruning_utxoset_commitment(&mut batch, &seed).unwrap();
             self.db.write(batch).unwrap();
             drop(pruning_meta_write);
         }

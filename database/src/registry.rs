@@ -61,6 +61,7 @@ pub enum DatabaseStorePrefixes {
     // ---- Pruning metadata ----
     PruningUtxosetSyncFlag = 60,
     BodyMissingAnticone = 61,
+    PruningUtxosetCommitment = 62,
 
     // ---- Metadata ----
     MultiConsensusMetadata = 124,

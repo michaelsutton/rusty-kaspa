@@ -34,6 +34,7 @@ use kaspa_consensus_core::{
     muhash::MuHashExtensions,
     pruning::{PruningPointProof, PruningPointTrustedData},
     trusted::ExternalGhostdagData,
+    utxo::utxo_diff::ImmutableUtxoDiff,
 };
 use kaspa_consensusmanager::SessionLock;
 use kaspa_core::{debug, info, trace, warn};
@@ -41,7 +42,7 @@ use kaspa_database::prelude::{BatchDbWriter, DB, MemoryWriter, StoreResultExt};
 use kaspa_hashes::{Hash, ZERO_HASH};
 use kaspa_muhash::MuHash;
 use kaspa_utils::iter::IterExtensions;
-use parking_lot::RwLockUpgradableReadGuard;
+use parking_lot::{Mutex, RwLockUpgradableReadGuard};
 use rocksdb::WriteBatch;
 use std::{
     collections::{VecDeque, hash_map::Entry::Vacant},
@@ -56,6 +57,23 @@ use std::{
 pub enum PruningProcessingMessage {
     Exit,
     Process { sink_ghostdag_data: CompactGhostdagData },
+}
+
+/// Number of pruning cycles after node start during which the full O(n) UTXO-set read-back runs every cycle,
+/// re-anchoring the incrementally-maintained pruning-point MuHash to storage truth before the steady cadence.
+const PRUNING_READBACK_WARMUP_CYCLES: u64 = 3;
+
+/// Steady-state fixed cadence: the full read-back runs at least once every this many pruning cycles, or once
+/// every `Config::pruning_full_readback_interval_secs` of wall-clock, whichever comes first.
+const PRUNING_READBACK_MAX_CYCLES: u64 = 16;
+
+/// In-memory cadence state governing how often the full O(n) UTXO-set read-back re-anchors the incrementally
+/// maintained pruning-point MuHash to storage truth. Reset on node start, which conservatively re-runs the
+/// warm-up read-backs and re-arms the wall-clock interval after every restart.
+struct ReadbackCadence {
+    full_readbacks_done: u64,
+    cycles_since_full_readback: u64,
+    last_full_readback: Instant,
 }
 
 /// A processor dedicated for moving the pruning point and pruning any possible data in its past
@@ -83,6 +101,9 @@ pub struct PruningProcessor {
 
     // Signals
     is_consensus_exiting: Arc<AtomicBool>,
+
+    // Cadence state for the full pruning-point UTXO-commitment read-back (interior-mutable; shared via Arc)
+    readback_cadence: Mutex<ReadbackCadence>,
 }
 
 impl Deref for PruningProcessor {
@@ -114,6 +135,11 @@ impl PruningProcessor {
             pruning_lock,
             config,
             is_consensus_exiting,
+            readback_cadence: Mutex::new(ReadbackCadence {
+                full_readbacks_done: 0,
+                cycles_since_full_readback: 0,
+                last_full_readback: Instant::now(),
+            }),
         }
     }
 
@@ -252,6 +278,17 @@ impl PruningProcessor {
             return false;
         }
 
+        // Load (or seed) the incrementally-maintained pruning-point MuHash. On a normal resume it is the value
+        // persisted at `utxoset_position`; if absent (a node upgrading to this version, forward-only schema add)
+        // seed it once from a full read-back of the currently-written snapshot set.
+        // Read and release the pruning-meta lock before the `None` arm, which re-acquires it inside
+        // `compute_pruning_utxoset_muhash` (parking_lot read locks are not recursive-safe under a queued writer).
+        let stored_commitment = self.pruning_meta_stores.read().pruning_utxoset_commitment().unwrap();
+        let mut running_commitment = match stored_commitment {
+            Some(commitment) => commitment,
+            None => self.compute_pruning_utxoset_muhash(),
+        };
+
         for chain_block in self.reachability_service.forward_chain_iterator(utxoset_position, new_pruning_point, true).skip(1) {
             if self.is_consensus_exiting.load(Ordering::Relaxed) {
                 return false;
@@ -268,27 +305,96 @@ impl PruningProcessor {
             let mut batch = WriteBatch::default();
             pruning_meta_write.utxo_set.write_diff_batch(&mut batch, utxo_diff.as_ref()).unwrap();
             pruning_meta_write.set_utxoset_position(&mut batch, chain_block).unwrap();
+            // Fold exactly the entries `write_diff_batch` persists into the running MuHash and stage the result
+            // into the same batch, so the snapshot, its position, and its commitment are written (or not) together.
+            for (outpoint, entry) in utxo_diff.removed().iter() {
+                running_commitment.remove_utxo(outpoint, entry);
+            }
+            for (outpoint, entry) in utxo_diff.added().iter() {
+                running_commitment.add_utxo(outpoint, entry);
+            }
+            pruning_meta_write.set_pruning_utxoset_commitment(&mut batch, &running_commitment).unwrap();
             self.db.write(batch).unwrap();
             drop(pruning_meta_write);
         }
 
-        if self.config.enable_sanity_checks {
-            info!("Performing a sanity check that the new UTXO set has the expected UTXO commitment");
-            self.assert_utxo_commitment(new_pruning_point);
+        // Always-on O(1) guard: the incrementally-maintained commitment must match the header commitment every
+        // cycle. This catches the pruning-replay regression class (skipped/duplicated chain block, wrong diff
+        // fetch, boundary bug, double-apply) at fail-fast-at-source, independent of `enable_sanity_checks`.
+        let header_commitment = self.headers_store.get_header(new_pruning_point).unwrap().utxo_commitment;
+        info!("Verifying the new pruning point UTXO commitment (incremental)");
+        assert_eq!(
+            running_commitment.clone().finalize(),
+            header_commitment,
+            "Updated pruning point utxo set does not match the header utxo commitment"
+        );
+
+        // Cadenced full O(n) read-back re-anchors the incremental value to storage truth on a schedule, and on
+        // success re-persists the storage-recomputed value. See `should_run_full_readback` for the cadence.
+        if self.should_run_full_readback() {
+            let recomputed = self.assert_utxo_commitment(new_pruning_point);
+            let mut pruning_meta_write = self.pruning_meta_stores.write();
+            let mut batch = WriteBatch::default();
+            pruning_meta_write.set_pruning_utxoset_commitment(&mut batch, &recomputed).unwrap();
+            self.db.write(batch).unwrap();
+            drop(pruning_meta_write);
+            self.record_full_readback();
+        } else {
+            self.record_cycle_without_readback();
         }
         true
     }
 
-    fn assert_utxo_commitment(&self, pruning_point: Hash) {
-        info!("Verifying the new pruning point UTXO commitment (sanity test)");
-        let commitment = self.headers_store.get_header(pruning_point).unwrap().utxo_commitment;
+    /// Builds a `MuHash` over the entire currently-written pruning-point snapshot set (a full O(n) read-back).
+    fn compute_pruning_utxoset_muhash(&self) -> MuHash {
         let mut multiset = MuHash::new();
         let pruning_meta_read = self.pruning_meta_stores.read();
         for (outpoint, entry) in pruning_meta_read.utxo_set.iterator().map(|r| r.unwrap()) {
             multiset.add_utxo(&outpoint, &entry);
         }
-        assert_eq!(multiset.finalize(), commitment, "Updated pruning point utxo set does not match the header utxo commitment");
+        multiset
+    }
+
+    /// Full O(n) storage-truth read-back: recompute the pruning-point MuHash from the written set and assert it
+    /// matches the header commitment. Returns the recomputed multiset so the caller can re-anchor the persisted value.
+    fn assert_utxo_commitment(&self, pruning_point: Hash) -> MuHash {
+        info!("Verifying the new pruning point UTXO commitment (sanity test)");
+        let commitment = self.headers_store.get_header(pruning_point).unwrap().utxo_commitment;
+        let multiset = self.compute_pruning_utxoset_muhash();
+        assert_eq!(
+            multiset.clone().finalize(),
+            commitment,
+            "Updated pruning point utxo set does not match the header utxo commitment"
+        );
         info!("Pruning point UTXO commitment was verified correctly (sanity test)");
+        multiset
+    }
+
+    /// Whether this pruning cycle runs the full storage-truth read-back, per the finalized cadence: every cycle
+    /// for the warm-up window after start; every cycle under the operator opt-in / surgery window; otherwise
+    /// whichever of the fixed cycle count or the operator wall-clock cap is reached first.
+    fn should_run_full_readback(&self) -> bool {
+        let cadence = self.readback_cadence.lock();
+        if cadence.full_readbacks_done < PRUNING_READBACK_WARMUP_CYCLES {
+            return true;
+        }
+        if self.config.pruning_full_readback_every_cycle {
+            return true;
+        }
+        cadence.cycles_since_full_readback >= PRUNING_READBACK_MAX_CYCLES
+            || cadence.last_full_readback.elapsed().as_secs() >= self.config.pruning_full_readback_interval_secs
+    }
+
+    fn record_full_readback(&self) {
+        let mut cadence = self.readback_cadence.lock();
+        cadence.full_readbacks_done = cadence.full_readbacks_done.saturating_add(1);
+        cadence.cycles_since_full_readback = 0;
+        cadence.last_full_readback = Instant::now();
+    }
+
+    fn record_cycle_without_readback(&self) {
+        let mut cadence = self.readback_cadence.lock();
+        cadence.cycles_since_full_readback = cadence.cycles_since_full_readback.saturating_add(1);
     }
 
     fn prune(&self, new_pruning_point: Hash, retention_period_root: Hash) {

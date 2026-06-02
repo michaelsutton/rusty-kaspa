@@ -1,6 +1,6 @@
 use clap::{Arg, ArgAction, Command, arg};
 use kaspa_consensus_core::{
-    config::Config,
+    config::{Config, MAX_PRUNING_FULL_READBACK_INTERVAL_SECS},
     network::{NetworkId, NetworkType},
 };
 use kaspa_core::kaspad_env::version;
@@ -93,6 +93,7 @@ pub struct Args {
     pub disable_grpc: bool,
     pub ram_scale: f64,
     pub retention_period_days: Option<f64>,
+    pub pruning_sanity_readback_interval_hours: Option<u64>,
 
     pub override_params_file: Option<String>,
 
@@ -151,6 +152,7 @@ impl Default for Args {
             disable_grpc: false,
             ram_scale: 1.0,
             retention_period_days: None,
+            pruning_sanity_readback_interval_hours: None,
             override_params_file: None,
             rocksdb_preset: None,
             rocksdb_wal_dir: None,
@@ -176,6 +178,15 @@ impl Args {
         config.externalip = self.externalip.map(|v| v.normalize(config.default_p2p_port()));
         config.ram_scale = self.ram_scale;
         config.retention_period_days = self.retention_period_days;
+        // Site-A every-cycle full read-back opt-in via the existing `--sanity` flag (and, downstream, the
+        // storage-surgery / early-mainnet window). `enable_sanity_checks` stays unconditionally on (sites A/B/C
+        // unchanged); the incremental O(1) pruning-point commitment guard is always-on regardless of this flag.
+        config.pruning_full_readback_every_cycle = self.sanity;
+        if let Some(hours) = self.pruning_sanity_readback_interval_hours {
+            const SECS_PER_HOUR: u64 = 60 * 60;
+            config.pruning_full_readback_interval_secs =
+                hours.saturating_mul(SECS_PER_HOUR).clamp(SECS_PER_HOUR, MAX_PRUNING_FULL_READBACK_INTERVAL_SECS);
+        }
 
         #[cfg(feature = "devnet-prealloc")]
         if let Some(num_prealloc_utxos) = self.num_prealloc_utxos {
@@ -427,6 +438,13 @@ a large RAM (~64GB) can set this value to ~3.0-4.0 and gain superior performance
                 .help("The number of total days of data to keep.")
         )
         .arg(
+            Arg::new("pruning-sanity-readback-interval-hours")
+                .long("pruning-sanity-readback-interval-hours")
+                .require_equals(true)
+                .value_parser(clap::value_parser!(u64))
+                .help("Wall-clock cap in hours (1-48, default 24) for the periodic full pruning-point UTXO-commitment read-back.")
+        )
+        .arg(
             Arg::new("override-params-file")
                 .long("override-params-file")
                 .require_equals(true)
@@ -541,6 +559,10 @@ impl Args {
             disable_grpc: arg_match_unwrap_or::<bool>(&m, "nogrpc", defaults.disable_grpc),
             ram_scale: arg_match_unwrap_or::<f64>(&m, "ram-scale", defaults.ram_scale),
             retention_period_days: m.get_one::<f64>("retention-period-days").cloned().or(defaults.retention_period_days),
+            pruning_sanity_readback_interval_hours: m
+                .get_one::<u64>("pruning-sanity-readback-interval-hours")
+                .cloned()
+                .or(defaults.pruning_sanity_readback_interval_hours),
 
             #[cfg(feature = "devnet-prealloc")]
             num_prealloc_utxos: m.get_one::<u64>("num-prealloc-utxos").cloned(),
