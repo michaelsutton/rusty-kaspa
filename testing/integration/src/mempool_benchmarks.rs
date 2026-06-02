@@ -14,6 +14,7 @@ use itertools::Itertools;
 use kaspa_addresses::Address;
 use kaspa_consensus::params::Params;
 use kaspa_consensus_core::{
+    config::constants::consensus::DEFAULT_GAS_PER_LANE_LIMIT,
     constants::{SOMPI_PER_KASPA, TX_VERSION_TOCCATA},
     hashing::sighash::SigHashReusedValuesUnsync,
     mass::{ComputeBudget, MassCalculator, ScriptUnits, transaction_estimated_serialized_size},
@@ -390,7 +391,8 @@ async fn bench_bbt_latency_2() {
 ///
 /// The miner picks txs from the mempool, so lanes-per-block = txs-per-block
 /// (typically ~300 TPB from baseline). This measures the case where
-/// each level draws transactions from a fixed-size random lane pool.
+/// each level draws transactions from a fixed-size random lane pool. Each tx
+/// also carries fixed gas so the block selector exercises per-lane gas limits.
 ///
 /// Run with:
 /// `cargo test --release --package kaspa-testing-integration --lib --features devnet-prealloc -- mempool_benchmarks::bench_bbt_latency_lanes --exact --nocapture --ignored`
@@ -405,6 +407,7 @@ async fn bench_bbt_latency_lanes() {
     const TX_COUNT: usize = 1_200_000;
     const TX_LEVEL_WIDTH: usize = 6_000;
     const TX_LANES_PER_LEVEL: usize = 200;
+    const TX_GAS: u64 = DEFAULT_GAS_PER_LANE_LIMIT / 2;
     const TPS_PRESSURE: u64 = u64::MAX;
     const SUBMIT_BLOCK_CLIENTS: usize = 20;
     const SUBMIT_TX_CLIENTS: usize = 2;
@@ -435,9 +438,10 @@ async fn bench_bbt_latency_lanes() {
         TX_COUNT / TX_LEVEL_WIDTH,
         TX_LEVEL_WIDTH,
         TX_LANES_PER_LEVEL,
+        TX_GAS,
     );
     common::utils::verify_tx_dag(&utxoset, &txs);
-    info!("Generated {} txs using {} random lane ids per level", txs.len(), TX_LANES_PER_LEVEL);
+    info!("Generated {} txs using {} random lane ids per level and {} gas per tx", txs.len(), TX_LANES_PER_LEVEL, TX_GAS);
 
     let client_manager = Arc::new(ClientManager::new(args));
     let mut tasks = TasksRunner::new(Some(DaemonTask::build(client_manager.clone())))

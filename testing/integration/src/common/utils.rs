@@ -123,7 +123,8 @@ fn generate_level_lane_assignments<R: Rng + ?Sized>(
 /// Like [`generate_tx_dag`] but each level draws tx lanes from a level-local pool
 /// of `lanes_per_level` unique subnetwork IDs.
 ///
-/// Uses `TX_VERSION_TOCCATA` so non-native subnetworks pass validation.
+/// Uses `TX_VERSION_TOCCATA` so non-native subnetworks pass validation, and
+/// assigns the requested fixed gas value to each generated transaction.
 pub fn generate_tx_dag_with_lanes(
     mut utxoset: UtxoCollection,
     schnorr_key: Keypair,
@@ -131,6 +132,7 @@ pub fn generate_tx_dag_with_lanes(
     target_levels: usize,
     target_width: usize,
     lanes_per_level: usize,
+    gas: u64,
 ) -> Vec<Arc<Transaction>> {
     let num_inputs = CONTRACT_FACTOR as usize;
     let num_outputs = EXPAND_FACTOR;
@@ -157,7 +159,7 @@ pub fn generate_tx_dag_with_lanes(
                 let outputs = (0..num_outputs)
                     .map(|_| TransactionOutput { value: total_out / num_outputs, script_public_key: spk.clone(), covenant: None })
                     .collect_vec();
-                let unsigned_tx = Transaction::new(TX_VERSION_TOCCATA, inputs, outputs, 0, subnetwork, 0, vec![]);
+                let unsigned_tx = Transaction::new(TX_VERSION_TOCCATA, inputs, outputs, 0, subnetwork, gas, vec![]);
                 sign(SignableTransaction::with_entries(unsigned_tx, entries), schnorr_key)
             })
             .collect::<Vec<_>>()
