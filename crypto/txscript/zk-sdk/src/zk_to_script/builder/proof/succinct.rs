@@ -1,5 +1,5 @@
 use super::Result;
-use crate::zk_precompiles::risc0::zk_to_script::{BoundedR0SuccinctScript, R0ScriptBuilder, builder::proof::FinalizedR0Script};
+use crate::zk_to_script::{BoundedR0SuccinctScript, R0ScriptBuilder, builder::proof::FinalizedR0Script};
 use risc0_binfmt::Digestible;
 use risc0_zkvm::{Digest, SuccinctReceipt, sha};
 

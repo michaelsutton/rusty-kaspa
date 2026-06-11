@@ -1,5 +1,4 @@
-use super::result::Result;
-use crate::{EngineFlags, script_builder::ScriptBuilder};
+use kaspa_txscript::{EngineFlags, script_builder::ScriptBuilder};
 use std::marker::PhantomData;
 mod builder;
 #[cfg(any(feature = "wasm32-sdk", feature = "wasm32-core"))]

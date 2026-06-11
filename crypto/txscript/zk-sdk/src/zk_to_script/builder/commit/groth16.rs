@@ -1,20 +1,16 @@
 use ark_bn254::Bn254;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use kaspa_txscript::{
+    opcodes::codes::{OpCat, OpDup, OpFromAltStack, OpRot, OpSHA256, OpSubstr, OpSwap, OpToAltStack, OpZkPrecompile},
+    zk_precompiles::tags::ZkTag,
+};
 use risc0_zkvm::{Digest, Groth16ReceiptVerifierParameters};
 use std::marker::PhantomData;
 
-use super::super::super::Result;
 use crate::{
-    opcodes::codes::{OpCat, OpDup, OpFromAltStack, OpRot, OpSHA256, OpSubstr, OpSwap, OpToAltStack, OpZkPrecompile},
-    zk_precompiles::{
-        risc0::{
-            R0Error,
-            zk_to_script::{
-                BoundedR0Groth16Script, R0ScriptBuilder, UnboundedR0Script, builder::proof::R0_SERIALIZED_UNCOMPRESSED_VK,
-            },
-        },
-        tags::ZkTag,
-    },
+    error::Error,
+    result::Result,
+    zk_to_script::{BoundedR0Groth16Script, R0ScriptBuilder, UnboundedR0Script, builder::proof::R0_SERIALIZED_UNCOMPRESSED_VK},
 };
 
 /// Splits a r0 digest into two 32-byte BN254-field-friendly halves.
@@ -49,7 +45,7 @@ impl R0ScriptBuilder<UnboundedR0Script> {
         // a malicious spender can't swap it for a VK they control.
         let mut serialized_vk = Vec::new();
         let verifying_key = ark_groth16::VerifyingKey::<Bn254>::deserialize_uncompressed(R0_SERIALIZED_UNCOMPRESSED_VK.as_slice())?;
-        verifying_key.serialize_compressed(&mut serialized_vk).map_err(|_| R0Error::BincodeVkSerialization)?;
+        verifying_key.serialize_compressed(&mut serialized_vk).map_err(|_| Error::VkSerialization)?;
 
         // Spending script left us with: [..., proof, journal_hash]   (top = journal_hash)
 

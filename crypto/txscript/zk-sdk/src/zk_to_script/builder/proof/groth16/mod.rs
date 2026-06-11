@@ -1,12 +1,11 @@
 mod vk;
 
 use super::Result;
-use crate::zk_precompiles::risc0::zk_to_script::builder::proof::FinalizedR0Script;
-pub use crate::zk_precompiles::risc0::zk_to_script::builder::proof::groth16::vk::R0_SERIALIZED_UNCOMPRESSED_VK;
-use crate::zk_precompiles::risc0::zk_to_script::{BoundedR0Groth16Script, R0ScriptBuilder};
-use crate::zk_precompiles::{
+pub use crate::zk_to_script::builder::proof::groth16::vk::R0_SERIALIZED_UNCOMPRESSED_VK;
+use crate::{
+    error::Error,
     points::{G1, G2, PointFromBytes},
-    risc0::R0Error,
+    zk_to_script::{BoundedR0Groth16Script, R0ScriptBuilder, builder::proof::FinalizedR0Script},
 };
 use ark_bn254::Bn254;
 use ark_groth16::Proof;
@@ -26,7 +25,7 @@ impl R0ScriptBuilder<BoundedR0Groth16Script> {
         let redeem_script = self.builder.drain();
 
         // Decode the seal
-        let seal = Seal::decode(&receipt.seal).map_err(|e| R0Error::SealDecoding(e.to_string()))?;
+        let seal = Seal::decode(&receipt.seal).map_err(|e| Error::SealDecoding(e.to_string()))?;
 
         // Decode the bytes into group elements.
         let g1 = G1::from_r0_bytes(&seal.a)?;

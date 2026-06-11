@@ -1,15 +1,12 @@
 use std::marker::PhantomData;
 
-use super::super::super::Result;
 use crate::{
+    result::Result,
+    zk_to_script::{BoundedR0SuccinctScript, R0ScriptBuilder, UnboundedR0Script},
+};
+use kaspa_txscript::{
     opcodes::codes::OpZkPrecompile,
-    zk_precompiles::{
-        risc0::{
-            rcpt::HashFnId,
-            zk_to_script::{BoundedR0SuccinctScript, R0ScriptBuilder, UnboundedR0Script},
-        },
-        tags::ZkTag,
-    },
+    zk_precompiles::{risc0::rcpt::HashFnId, tags::ZkTag},
 };
 
 impl R0ScriptBuilder<UnboundedR0Script> {
