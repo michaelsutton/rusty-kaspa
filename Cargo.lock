@@ -3576,7 +3576,7 @@ dependencies = [
 
 [[package]]
 name = "kaspa-hashes"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "blake2b_simd",
  "blake3",
