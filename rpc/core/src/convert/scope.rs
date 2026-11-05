@@ -2,7 +2,7 @@
 
 use crate::{
     NotifyBlockAddedRequest, NotifyFinalityConflictRequest, NotifyNewBlockTemplateRequest, NotifyPruningPointUtxoSetOverrideRequest,
-    NotifySinkBlueScoreChangedRequest, NotifyUtxosChangedRequest, NotifyVirtualChainChangedRequest,
+    NotifySinkBlueScoreChangedRequest, NotifyUtxosChangedFilteredRequest, NotifyUtxosChangedRequest, NotifyVirtualChainChangedRequest,
     NotifyVirtualDaaScoreChangedRequest,
 };
 use kaspa_notify::scope::*;
@@ -57,6 +57,9 @@ impl From<&NotifyFinalityConflictRequest> for FinalityConflictResolvedScope {
 }
 from!(item: UtxosChanged, {
     Self::new(item.addresses.clone())
+});
+from!(item: UtxosChangedFiltered, {
+    Self::new(item.addresses, item.covenant_ids)
 });
 from!(SinkBlueScoreChanged);
 from!(VirtualDaaScoreChanged);

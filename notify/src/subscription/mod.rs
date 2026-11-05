@@ -13,6 +13,8 @@ use std::{
 pub mod array;
 pub mod compounded;
 pub mod context;
+#[cfg(test)]
+mod covenant_tests;
 pub mod single;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -48,7 +50,7 @@ impl From<i32> for Command {
 /// Defines how an incoming UtxosChanged mutation must be propagated upwards
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub enum UtxosChangedMutationPolicy {
-    /// Mutation granularity defined at address level
+    /// Mutation granularity defined by explicit address/covenant-ID filters
     #[default]
     AddressSet,
 

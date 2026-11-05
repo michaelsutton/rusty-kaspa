@@ -1,7 +1,7 @@
 use crate::{
     address::{error::Result, tracker::Counters},
     events::EventType,
-    scope::{Scope, UtxosChangedScope, VirtualChainChangedScope},
+    scope::{Scope, UtxosChangedFilteredScope, UtxosChangedScope, VirtualChainChangedScope},
     subscription::{Command, Compounded, Mutation, Subscription, context::SubscriptionContext},
 };
 use itertools::Itertools;
@@ -198,15 +198,49 @@ impl UtxosChangedSubscription {
     pub fn unregister(&mut self, addresses: Vec<Address>, context: &SubscriptionContext) -> Vec<Address> {
         context.address_tracker.unregister(&mut self.indexes, addresses)
     }
+
+    fn register_filters(
+        &mut self,
+        filters: UtxosChangedFilteredScope,
+        context: &SubscriptionContext,
+    ) -> Result<UtxosChangedFilteredScope> {
+        // Preserve the caller's address prefixes on the existing address-only path.
+        if filters.covenant_ids.is_empty() {
+            return Ok(UtxosChangedFilteredScope::new(self.register(filters.addresses, context)?, vec![]));
+        }
+        let added = context.address_tracker.register(&mut self.indexes, filters.into_keys())?;
+        Ok(UtxosChangedFilteredScope::from_keys(added.iter(), Prefix::Mainnet))
+    }
+
+    fn unregister_filters(&mut self, filters: UtxosChangedFilteredScope, context: &SubscriptionContext) -> UtxosChangedFilteredScope {
+        if filters.covenant_ids.is_empty() {
+            return UtxosChangedFilteredScope::new(self.unregister(filters.addresses, context), vec![]);
+        }
+        let removed = context.address_tracker.unregister(&mut self.indexes, filters.into_keys());
+        UtxosChangedFilteredScope::from_keys(removed.iter(), Prefix::Mainnet)
+    }
+
+    fn to_filters(&self, context: &SubscriptionContext) -> UtxosChangedFilteredScope {
+        let mut filters = UtxosChangedFilteredScope::default();
+        // Release the tracker read lock between entries, as in address-only scope reconstruction.
+        for (index, _) in self.indexes.iter().filter(|(_, count)| **count > 0) {
+            let tracker = context.address_tracker.data();
+            if let Some(key) = tracker.get_index(*index) {
+                filters.push_key(key, Prefix::Mainnet);
+            }
+        }
+        filters
+    }
 }
 
 impl Compounded for UtxosChangedSubscription {
     fn compound(&mut self, mutation: Mutation, context: &SubscriptionContext) -> Option<Mutation> {
         assert_eq!(self.event_type(), mutation.event_type());
-        if let Scope::UtxosChanged(scope) = mutation.scope {
+        if let Some((scope, blanket)) = mutation.scope.into_utxos_changed_filters() {
+            assert!(blanket || !scope.is_empty(), "filtered mutations were validated by the listener");
             match mutation.command {
                 Command::Start => {
-                    if scope.addresses.is_empty() {
+                    if blanket {
                         // Add All
                         #[allow(clippy::arithmetic_side_effects, reason = "ARITH-SAFETY(COUNTER)")]
                         {
@@ -217,18 +251,18 @@ impl Compounded for UtxosChangedSubscription {
                         }
                     } else {
                         // Add(A)
-                        let added = self.register(scope.addresses, context).expect("compounded always registers");
+                        let added = self.register_filters(scope, context).expect("compounded always registers");
                         if !added.is_empty() && self.all == 0 {
-                            return Some(Mutation::new(Command::Start, UtxosChangedScope::new(added).into()));
+                            return Some(Mutation::new(Command::Start, added.into_scope()));
                         }
                     }
                 }
                 Command::Stop => {
-                    if !scope.addresses.is_empty() {
+                    if !blanket {
                         // Remove(R)
-                        let removed = self.unregister(scope.addresses, context);
+                        let removed = self.unregister_filters(scope, context);
                         if !removed.is_empty() && self.all == 0 {
-                            return Some(Mutation::new(Command::Stop, UtxosChangedScope::new(removed).into()));
+                            return Some(Mutation::new(Command::Stop, removed.into_scope()));
                         }
                     } else {
                         // Remove All
@@ -238,9 +272,9 @@ impl Compounded for UtxosChangedSubscription {
                             self.all -= 1;
                         }
                         if self.all == 0 {
-                            let addresses = self.to_addresses(Prefix::Mainnet, context);
-                            if !addresses.is_empty() {
-                                return Some(Mutation::new(Command::Start, UtxosChangedScope::new(addresses).into()));
+                            let filters = self.to_filters(context);
+                            if !filters.is_empty() {
+                                return Some(Mutation::new(Command::Start, filters.into_scope()));
                             } else {
                                 return Some(Mutation::new(Command::Stop, UtxosChangedScope::default().into()));
                             }
@@ -264,8 +298,7 @@ impl Subscription for UtxosChangedSubscription {
     }
 
     fn scope(&self, context: &SubscriptionContext) -> Scope {
-        let addresses = if self.all > 0 { vec![] } else { self.to_addresses(Prefix::Mainnet, context) };
-        Scope::UtxosChanged(UtxosChangedScope::new(addresses))
+        if self.all > 0 { UtxosChangedScope::default().into() } else { self.to_filters(context).into_scope() }
     }
 }
 

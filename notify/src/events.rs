@@ -1,4 +1,3 @@
-use super::scope::Scope;
 use crate::error::Error;
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
@@ -12,13 +11,6 @@ macro_rules! event_type_enum {
         usize_try_from!{
             $(#[$meta])* $vis enum $name {
                 $($(#[$variant_meta])* $variant_name $(= $val)?,)*
-            }
-        }
-        impl std::convert::From<&Scope> for $name {
-            fn from(value: &Scope) -> Self {
-                match value {
-                    $(Scope::$variant_name(_) => $name::$variant_name),*
-                }
             }
         }
         impl std::fmt::Display for $name {

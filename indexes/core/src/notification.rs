@@ -1,6 +1,7 @@
 use crate::indexed_utxos::{UtxoChanges, UtxoSetByScriptPublicKey};
 use derive_more::Display;
 use kaspa_notify::{
+    address::tracker::TrackerKey,
     events::EventType,
     full_featured,
     notification::Notification as NotificationTrait,
@@ -101,27 +102,47 @@ impl UtxosChangedNotification {
         subscription: &UtxosChangedSubscription,
         context: &SubscriptionContext,
     ) -> UtxoSetByScriptPublicKey {
-        // As an optimization, we iterate over the smaller set (O(n)) among the two below
-        // and check existence over the larger set (O(1))
         let mut result = HashMap::default();
         let subscription_data = subscription.data();
-        if utxo_set.len() < subscription_data.len() {
-            {
+        if !subscription_data.has_covenant_ids() {
+            // As an optimization, we iterate over the smaller set (O(n)) among the two below
+            // and check existence over the larger set (O(1))
+            if utxo_set.len() < subscription_data.len() {
                 utxo_set.iter().for_each(|(script_public_key, collection)| {
                     if subscription_data.contains(script_public_key, context) {
                         result.insert(script_public_key.clone(), collection.clone());
                     }
                 });
+            } else {
+                let tracker_data = context.address_tracker.data();
+                subscription_data.iter().for_each(|index| {
+                    if let Some(TrackerKey::Spk(script_public_key)) = tracker_data.get_index(*index)
+                        && let Some(collection) = utxo_set.get(script_public_key)
+                    {
+                        result.insert(script_public_key.clone(), collection.clone());
+                    }
+                });
             }
-        } else {
-            let tracker_data = context.address_tracker.data();
-            subscription_data.iter().for_each(|index| {
-                if let Some(script_public_key) = tracker_data.get_index(*index)
-                    && let Some(collection) = utxo_set.get(script_public_key)
-                {
-                    result.insert(script_public_key.clone(), collection.clone());
+            return result;
+        }
+
+        // Covenant IDs belong to individual entries and have no bucket lookup in
+        // this SPK-keyed map, so covenant subscriptions require an entry scan.
+        for (spk, collection) in utxo_set {
+            if subscription_data.contains(spk, context) {
+                // An SPK match covers the whole bucket, regardless of covenant IDs.
+                // Taking this branch also avoids processing overlapping covenant matches.
+                result.insert(spk.clone(), collection.clone());
+            } else {
+                let filtered: HashMap<_, _> = collection
+                    .iter()
+                    .filter(|(_, entry)| entry.covenant_id.is_some_and(|id| subscription_data.contains_covenant_id(&id, context)))
+                    .map(|(key, entry)| (key.clone(), *entry))
+                    .collect();
+                if !filtered.is_empty() {
+                    result.insert(spk.clone(), filtered);
                 }
-            });
+            }
         }
         result
     }

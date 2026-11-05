@@ -1,18 +1,32 @@
 use super::events::EventType;
+use crate::address::tracker::TrackerKey;
 use borsh::{BorshDeserialize, BorshSerialize};
 use derive_more::Display;
-use kaspa_addresses::Address;
+use kaspa_addresses::{Address, Prefix};
+use kaspa_hashes::Hash;
+use kaspa_txscript::extract_script_pub_key_address;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use workflow_serializer::prelude::*;
 
 macro_rules! scope_enum {
     ($(#[$meta:meta])* $vis:vis enum $name:ident {
     $($(#[$variant_meta:meta])* $variant_name:ident,)*
-    }) => {
+    } aliases { $($alias:ident => $event:ident,)* }) => {
         paste::paste! {
             $(#[$meta])*
             $vis enum $name {
-                $($(#[$variant_meta])* $variant_name([<$variant_name Scope>])),*
+                $($(#[$variant_meta])* $variant_name([<$variant_name Scope>])),*,
+                $($alias([<$alias Scope>])),*
+            }
+
+            impl From<&$name> for EventType {
+                fn from(value: &$name) -> Self {
+                    match value {
+                        $($name::$variant_name(_) => EventType::$variant_name,)*
+                        $($name::$alias(_) => EventType::$event,)*
+                    }
+                }
             }
 
             impl std::convert::From<EventType> for $name {
@@ -26,6 +40,11 @@ macro_rules! scope_enum {
             $(impl std::convert::From<[<$variant_name Scope>]> for Scope {
                 fn from(value: [<$variant_name Scope>]) -> Self {
                     Scope::$variant_name(value)
+                }
+            })*
+            $(impl From<[<$alias Scope>]> for Scope {
+                fn from(value: [<$alias Scope>]) -> Self {
+                    Scope::$alias(value)
                 }
             })*
         }
@@ -46,11 +65,25 @@ pub enum Scope {
     PruningPointUtxoSetOverride,
     NewBlockTemplate,
 }
+aliases {
+    UtxosChangedFiltered => UtxosChanged,
+}
 }
 
 impl Scope {
     pub fn event_type(&self) -> EventType {
         self.into()
+    }
+
+    pub(crate) fn into_utxos_changed_filters(self) -> Option<(UtxosChangedFilteredScope, bool)> {
+        match self {
+            Self::UtxosChanged(scope) => {
+                let blanket = scope.addresses.is_empty();
+                Some((UtxosChangedFilteredScope::new(scope.addresses, vec![]), blanket))
+            }
+            Self::UtxosChangedFiltered(scope) => Some((scope, false)),
+            _ => None,
+        }
     }
 }
 
@@ -180,6 +213,66 @@ impl Eq for UtxosChangedScope {}
 impl UtxosChangedScope {
     pub fn new(addresses: Vec<Address>) -> Self {
         Self { addresses }
+    }
+}
+
+/// Explicit address/covenant-ID filters. Both lists must not be empty together.
+/// Kept separate from the legacy scope so older nodes reject this scope rather
+/// than interpreting a covenant-only subscription as a blanket subscription.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UtxosChangedFilteredScope {
+    pub addresses: Vec<Address>,
+    pub covenant_ids: Vec<Hash>,
+}
+
+impl PartialEq for UtxosChangedFilteredScope {
+    fn eq(&self, other: &Self) -> bool {
+        self.addresses.iter().collect::<HashSet<_>>() == other.addresses.iter().collect::<HashSet<_>>()
+            && self.covenant_ids.iter().collect::<HashSet<_>>() == other.covenant_ids.iter().collect::<HashSet<_>>()
+    }
+}
+
+impl Eq for UtxosChangedFilteredScope {}
+
+impl UtxosChangedFilteredScope {
+    pub fn new(addresses: Vec<Address>, covenant_ids: Vec<Hash>) -> Self {
+        Self { addresses, covenant_ids }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.addresses.is_empty() && self.covenant_ids.is_empty()
+    }
+
+    pub(crate) fn into_keys(self) -> Vec<TrackerKey> {
+        self.addresses.into_iter().map(TrackerKey::from).chain(self.covenant_ids.into_iter().map(TrackerKey::Cov)).collect()
+    }
+
+    pub(crate) fn from_keys<'a>(keys: impl IntoIterator<Item = &'a TrackerKey>, prefix: Prefix) -> Self {
+        let mut filters = Self::default();
+        for key in keys {
+            filters.push_key(key, prefix);
+        }
+        filters
+    }
+
+    pub(crate) fn push_key(&mut self, key: &TrackerKey, prefix: Prefix) {
+        match key {
+            TrackerKey::Spk(spk) => self
+                .addresses
+                .push(extract_script_pub_key_address(spk, prefix).expect("SPK subscription keys originate from addresses")),
+            TrackerKey::Cov(id) => self.covenant_ids.push(*id),
+        }
+    }
+
+    pub(crate) fn into_scope(self) -> Scope {
+        if self.covenant_ids.is_empty() { UtxosChangedScope::new(self.addresses).into() } else { self.into() }
+    }
+}
+
+impl std::fmt::Display for UtxosChangedFilteredScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UtxosChangedFilteredScope ({} addresses, {} covenant IDs)", self.addresses.len(), self.covenant_ids.len())
     }
 }
 

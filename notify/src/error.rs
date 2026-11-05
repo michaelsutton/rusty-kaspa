@@ -26,6 +26,9 @@ pub enum Error {
     #[error("Invalid event type: {0}")]
     InvalidEventType(String),
 
+    #[error("UTXO change filters must contain at least one address or covenant ID")]
+    EmptyUtxosChangedFilter,
+
     #[error(transparent)]
     AddressError(#[from] crate::address::error::Error),
 }

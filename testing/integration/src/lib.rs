@@ -10,6 +10,9 @@ pub mod common;
 pub mod tasks;
 
 #[cfg(test)]
+mod covenant_notifications;
+
+#[cfg(test)]
 pub mod consensus_integration_tests;
 
 #[cfg(test)]

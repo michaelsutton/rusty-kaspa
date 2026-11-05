@@ -1,15 +1,79 @@
 use crate::address::error::{Error, Result};
-use indexmap::{IndexMap, map::Entry};
+use indexmap::{Equivalent, IndexMap, map::Entry};
 use itertools::Itertools;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_core::{debug, trace};
+use kaspa_hashes::Hash as CovenantId;
 use kaspa_txscript::{extract_script_pub_key_address, pay_to_address_script};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     collections::{HashMap, HashSet, hash_map, hash_set},
     fmt::Display,
 };
+
+/// A subscription target interned in the shared tracker index space.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TrackerKey {
+    Spk(ScriptPublicKey),
+    Cov(CovenantId),
+}
+
+/// Borrowed lookup key, avoiding script allocations during notification filtering.
+#[derive(Clone, Copy, Hash)]
+pub enum TrackerKeyRef<'a> {
+    Spk(&'a ScriptPublicKey),
+    Cov(&'a CovenantId),
+}
+
+impl TrackerKey {
+    pub fn as_key_ref(&self) -> TrackerKeyRef<'_> {
+        match self {
+            Self::Spk(spk) => TrackerKeyRef::Spk(spk),
+            Self::Cov(id) => TrackerKeyRef::Cov(id),
+        }
+    }
+}
+
+impl std::hash::Hash for TrackerKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.as_key_ref(), state);
+    }
+}
+
+impl Equivalent<TrackerKey> for TrackerKeyRef<'_> {
+    fn equivalent(&self, key: &TrackerKey) -> bool {
+        match (self, key) {
+            (Self::Spk(a), TrackerKey::Spk(b)) => *a == b,
+            (Self::Cov(a), TrackerKey::Cov(b)) => *a == b,
+            _ => false,
+        }
+    }
+}
+
+impl From<Address> for TrackerKey {
+    fn from(address: Address) -> Self {
+        Self::Spk(pay_to_address_script(&address))
+    }
+}
+
+impl From<ScriptPublicKey> for TrackerKey {
+    fn from(spk: ScriptPublicKey) -> Self {
+        Self::Spk(spk)
+    }
+}
+
+impl<'a> From<&'a ScriptPublicKey> for TrackerKeyRef<'a> {
+    fn from(spk: &'a ScriptPublicKey) -> Self {
+        Self::Spk(spk)
+    }
+}
+
+impl<'a> From<&'a CovenantId> for TrackerKeyRef<'a> {
+    fn from(id: &'a CovenantId) -> Self {
+        Self::Cov(id)
+    }
+}
 
 pub trait Indexer {
     fn contains(&self, index: Index) -> bool;
@@ -221,25 +285,25 @@ impl Indexer for IndexSet {
 
 #[derive(Debug)]
 struct Inner {
-    /// Index-based map of [`ScriptPublicKey`] to its reference count
+    /// Index-based map of [`TrackerKey`] to its reference count
     ///
     /// ### Implementation note
     ///
-    /// The whole purpose of the tracker is to reduce a [`ScriptPublicKey`] to an [`Index`] in all
+    /// The tracker reduces each SPK or covenant ID to an [`Index`] in all
     /// [`Indexer`] instances. Therefore, every mutable access to the struct must be careful not to
     /// use `IndexMap` APIs which alter the index order of existing entries.
-    script_pub_keys: IndexMap<ScriptPublicKey, RefCount>,
+    keys: IndexMap<TrackerKey, RefCount>,
 
-    /// Maximum address count that can be registered. Note this must be `<= Index::MAX` since we cast the returned indexes to `Index`
+    /// Maximum combined SPK/covenant-ID count that can be registered. Note this must be `<= Index::MAX` since we cast the returned indexes to `Index`
     max_addresses: usize,
 
-    /// The preallocation used for the address index (`script_pub_keys`)
+    /// Shared key preallocation, configured by the legacy address-capacity option.
     addresses_preallocation: Option<usize>,
 
-    /// Set of entries [`Index`] in `script_pub_keys` having their [`RefCount`] at 0 hence considered
+    /// Set of entries [`Index`] in `keys` having their [`RefCount`] at 0 hence considered
     /// empty.
     ///
-    /// An empty entry can be recycled and hold a new `script_pub_key`.
+    /// An empty entry can be recycled for either key variant.
     empty_entries: HashSet<Index>,
 }
 
@@ -294,49 +358,46 @@ impl Inner {
             Self::MAX_ADDRESS_UPPER_BOUND
         );
         let max_addresses = max_addresses.unwrap_or(Self::DEFAULT_MAX_ADDRESSES);
-        debug!("Memory configuration: UTXO changed events wil be tracked for at most {} addresses", max_addresses);
+        debug!("Memory configuration: UTXO changed events will track at most {} SPK/covenant keys", max_addresses);
 
-        let script_pub_keys = IndexMap::with_capacity(capacity);
-        debug!("Creating an address tracker with a capacity of {}", script_pub_keys.capacity());
+        let keys = IndexMap::with_capacity(capacity);
+        debug!("Creating a subscription key tracker with a capacity of {}", keys.capacity());
 
         let empty_entries = HashSet::with_capacity(capacity);
-        Self { script_pub_keys, max_addresses, addresses_preallocation, empty_entries }
+        Self { keys, max_addresses, addresses_preallocation, empty_entries }
     }
 
     fn is_full(&self) -> bool {
-        self.script_pub_keys.len() >= self.max_addresses && self.empty_entries.is_empty()
+        self.keys.len() >= self.max_addresses && self.empty_entries.is_empty()
     }
 
-    fn get(&self, spk: &ScriptPublicKey) -> Option<(Index, RefCount)> {
-        self.script_pub_keys.get_full(spk).map(|(index, _, count)| (index as Index, *count))
+    fn get(&self, key: TrackerKeyRef<'_>) -> Option<(Index, RefCount)> {
+        self.keys.get_full(&key).map(|(index, _, count)| (index as Index, *count))
     }
 
-    fn get_index(&self, index: Index) -> Option<&ScriptPublicKey> {
-        self.script_pub_keys.get_index(index as usize).map(|(spk, _)| spk)
+    fn get_index(&self, index: Index) -> Option<&TrackerKey> {
+        self.keys.get_index(index as usize).map(|(key, _)| key)
     }
 
     fn get_index_address(&self, index: Index, prefix: Prefix) -> Option<Address> {
-        self.script_pub_keys
-            .get_index(index as usize)
-            .map(|(spk, _)| extract_script_pub_key_address(spk, prefix).expect("is retro-convertible"))
+        match self.get_index(index)? {
+            TrackerKey::Spk(spk) => Some(extract_script_pub_key_address(spk, prefix).expect("is retro-convertible")),
+            TrackerKey::Cov(_) => None,
+        }
     }
 
-    fn get_or_insert(&mut self, spk: ScriptPublicKey) -> Result<Index> {
+    fn get_or_insert(&mut self, key: TrackerKey) -> Result<Index> {
         match self.is_full() {
-            false => match self.script_pub_keys.entry(spk) {
+            false => match self.keys.entry(key) {
                 Entry::Occupied(entry) => Ok(entry.index() as Index),
                 Entry::Vacant(entry) => {
                     let mut index = entry.index() as Index;
-                    trace!(
-                        "AddressTracker insert #{} {}",
-                        index,
-                        extract_script_pub_key_address(entry.key(), Prefix::Mainnet).unwrap()
-                    );
+                    trace!("UtxoTracker insert #{} {:?}", index, entry.key());
                     let _ = *entry.insert(0);
 
                     // Try to recycle an empty entry if there is some
                     let mut recycled = false;
-                    if index.checked_add(1).ok_or(Error::MaxCapacityReached)? as usize == self.script_pub_keys.len()
+                    if index.checked_add(1).ok_or(Error::MaxCapacityReached)? as usize == self.keys.len()
                         && !self.empty_entries.is_empty()
                     {
                         // Takes the first empty entry index
@@ -344,7 +405,7 @@ impl Inner {
                         if let Some(empty_index) = empty_index {
                             // Stores the newly created entry at the empty entry index while keeping it registered as an
                             // empty entry (because it is so at this stage, the ref count being 0).
-                            self.script_pub_keys.swap_remove_index(empty_index as usize);
+                            self.keys.swap_remove_index(empty_index as usize);
                             index = empty_index;
                             recycled = true;
                         }
@@ -356,39 +417,39 @@ impl Inner {
                     Ok(index)
                 }
             },
-            true => match self.script_pub_keys.get_index_of(&spk) {
+            true => match self.keys.get_index_of(&key) {
                 Some(index) => Ok(index as Index),
                 None => Err(Error::MaxCapacityReached),
             },
         }
     }
 
-    /// Increases by one the [`RefCount`] of the [`ScriptPublicKey`] at `index`.
+    /// Increases by one the [`RefCount`] of the key at `index`.
     ///
     /// If the entry had a reference count of 0 before the increase, its index is removed from
     /// the empty entries set.
     fn inc_count(&mut self, index: Index) {
-        if let Some((_, count)) = self.script_pub_keys.get_index_mut(index as usize) {
+        if let Some((_, count)) = self.keys.get_index_mut(index as usize) {
             #[allow(clippy::arithmetic_side_effects, reason = "ARITH-SAFETY(COUNTER)")]
             {
                 *count += 1;
             }
-            trace!("AddressTracker inc count #{} to {}", index, *count);
+            trace!("UtxoTracker inc count #{} to {}", index, *count);
             if *count == 1 {
                 self.empty_entries.remove(&index);
             }
         }
     }
 
-    /// Decreases by one the [`RefCount`] of the [`ScriptPublicKey`] at `index`.
+    /// Decreases by one the [`RefCount`] of the key at `index`.
     ///
     /// Panics if the ref count is already 0.
     ///
     /// When the reference count reaches zero, the index is inserted into the empty entries set.
     fn dec_count(&mut self, index: Index) {
-        if let Some((_, count)) = self.script_pub_keys.get_index_mut(index as usize) {
+        if let Some((_, count)) = self.keys.get_index_mut(index as usize) {
             *count = count.checked_sub(1).expect("We expect `count > 0`");
-            trace!("AddressTracker dec count #{} to {}", index, *count);
+            trace!("UtxoTracker dec count #{} to {}", index, *count);
             if *count == 0 {
                 self.empty_entries.insert(index);
             }
@@ -396,10 +457,10 @@ impl Inner {
     }
 
     fn len(&self) -> usize {
-        assert!(self.script_pub_keys.len() >= self.empty_entries.len(), "entries marked empty are never removed from script_pub_keys");
-        #[allow(clippy::arithmetic_side_effects, reason = "`self.empty_entries.len() <= self.script_pub_keys.len()`.")]
+        assert!(self.keys.len() >= self.empty_entries.len(), "entries marked empty are never removed from keys");
+        #[allow(clippy::arithmetic_side_effects, reason = "`self.empty_entries.len() <= self.keys.len()`.")]
         {
-            self.script_pub_keys.len() - self.empty_entries.len()
+            self.keys.len() - self.empty_entries.len()
         }
     }
 
@@ -408,14 +469,11 @@ impl Inner {
     }
 }
 
-/// Tracker of a set of [`Address`], indexing and counting registrations
+/// Shared tracker for SPK and covenant-ID subscription targets.
 ///
-/// #### Implementation design
-///
-/// Each [`Address`] is stored internally as a [`ScriptPubKey`](kaspa_consensus_core::tx::ScriptPublicKey).
-/// This prevents inter-network duplication and optimizes UTXOs filtering efficiency.
-///
-/// But consequently the address network prefix gets lost and must be globally provided when querying for addresses by indexes.
+/// Addresses are normalized to SPKs, removing network-prefix duplication. Both
+/// key variants share the same bounded index space and registration lifecycle.
+/// Address conversion helpers ignore covenant keys and require a network prefix.
 #[derive(Debug)]
 pub struct Tracker {
     inner: RwLock<Inner>,
@@ -423,7 +481,7 @@ pub struct Tracker {
 
 impl Display for Tracker {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} addresses", self.inner.read().script_pub_keys.len())
+        write!(f, "{} subscription keys", self.inner.read().keys.len())
     }
 }
 
@@ -434,7 +492,7 @@ impl Tracker {
     /// Expanded count for a maximum of 1M addresses
     pub const DEFAULT_MAX_ADDRESSES: usize = Inner::DEFAULT_MAX_ADDRESSES;
 
-    const ADDRESS_CHUNK_SIZE: usize = 1024;
+    const KEY_CHUNK_SIZE: usize = 1024;
 
     /// Computes the optimal expanded max address count fitting in the actual allocated size of
     /// the internal storage structure
@@ -452,10 +510,10 @@ impl Tracker {
     #[cfg(test)]
     pub fn with_addresses(addresses: &[Address]) -> Self {
         let tracker = Self { inner: RwLock::new(Inner::new(None)) };
-        for chunk in addresses.chunks(Self::ADDRESS_CHUNK_SIZE) {
+        for chunk in addresses.chunks(Self::KEY_CHUNK_SIZE) {
             let mut inner = tracker.inner.write();
             for address in chunk {
-                let index = inner.get_or_insert(pay_to_address_script(address)).unwrap();
+                let index = inner.get_or_insert(pay_to_address_script(address).into()).unwrap();
                 inner.inc_count(index);
             }
         }
@@ -466,8 +524,8 @@ impl Tracker {
         TrackerReadGuard { guard: self.inner.read() }
     }
 
-    pub fn get(&self, spk: &ScriptPublicKey) -> Option<(Index, RefCount)> {
-        self.inner.read().get(spk)
+    pub fn get<'a>(&self, key: impl Into<TrackerKeyRef<'a>>) -> Option<(Index, RefCount)> {
+        self.inner.read().get(key.into())
     }
 
     pub fn get_address(&self, address: &Address) -> Option<(Index, RefCount)> {
@@ -478,8 +536,14 @@ impl Tracker {
         self.inner.read().get_index_address(index, prefix)
     }
 
-    pub fn contains<T: Indexer>(&self, indexes: &T, spk: &ScriptPublicKey) -> bool {
-        self.get(spk).is_some_and(|(index, _)| indexes.contains(index))
+    pub fn contains<'a, T: Indexer>(&self, indexes: &T, key: impl Into<TrackerKeyRef<'a>>) -> bool {
+        self.get(key).is_some_and(|(index, _)| indexes.contains(index))
+    }
+
+    pub fn matches<T: Indexer>(&self, indexes: &T, spk: &ScriptPublicKey, covenant_id: Option<CovenantId>) -> bool {
+        let inner = self.inner.read();
+        inner.get(TrackerKeyRef::Spk(spk)).is_some_and(|(index, _)| indexes.contains(index))
+            || covenant_id.is_some_and(|id| inner.get(TrackerKeyRef::Cov(&id)).is_some_and(|(index, _)| indexes.contains(index)))
     }
 
     pub fn contains_address<T: Indexer>(&self, indexes: &T, address: &Address) -> bool {
@@ -498,19 +562,16 @@ impl Tracker {
         )
     }
 
-    /// Tries to register an `Address` vector into an `Indexer`. The addresses are first registered in the tracker if unknown
-    /// yet and their reference count is increased when successfully inserted in the `Indexer`.
-    ///
-    /// On success, returns the addresses that were actually inserted in the `Indexer`.
-    ///
-    /// Fails if the maximum address capacity is reached, rolling back registrations from this call.
-    pub fn register<T: Indexer>(&self, indexes: &mut T, mut addresses: Vec<Address>) -> Result<Vec<Address>> {
+    /// Registers targets in the shared key space and the supplied indexer.
+    /// Returns the targets whose registration became active in the indexer.
+    /// Capacity failures roll back all registrations from this call, across both key variants.
+    pub fn register<T: Indexer, K: Clone + Into<TrackerKey>>(&self, indexes: &mut T, mut targets: Vec<K>) -> Result<Vec<K>> {
         let mut rollback = false;
-        let mut rollback_addresses = vec![];
+        let mut rollback_targets = vec![];
         {
             let mut counter: usize = 0;
             let mut inner = self.inner.write();
-            addresses.retain(|address| {
+            targets.retain(|target| {
                 if rollback {
                     return false;
                 }
@@ -519,18 +580,18 @@ impl Tracker {
                 {
                     counter += 1;
                 }
-                if counter.is_multiple_of(Self::ADDRESS_CHUNK_SIZE) {
+                if counter.is_multiple_of(Self::KEY_CHUNK_SIZE) {
                     RwLockWriteGuard::bump(&mut inner);
                 }
-                let spk = pay_to_address_script(address);
+                let key = target.clone().into();
 
-                match inner.get_or_insert(spk) {
+                match inner.get_or_insert(key) {
                     Ok(index) => {
                         // Some indexers mutate existing entries even though `insert` returns false. Since `retain` excludes such
-                        // addresses from the success result, record them separately so a later failure can still roll them back.
+                        // targets from the success result, record them separately so a later failure can still roll them back.
                         let inserted = indexes.insert(index);
                         if !inserted && indexes.insertion_mutates_existing() {
-                            rollback_addresses.push(address.clone());
+                            rollback_targets.push(target.clone());
                         }
                         if inserted {
                             inner.inc_count(index);
@@ -548,37 +609,34 @@ impl Tracker {
             });
         }
         match rollback {
-            false => Ok(addresses),
+            false => Ok(targets),
             true => {
-                addresses.extend(rollback_addresses);
-                let _ = self.unregister(indexes, addresses);
+                targets.extend(rollback_targets);
+                let _ = self.unregister(indexes, targets);
                 Err(Error::MaxCapacityReached)
             }
         }
     }
 
-    /// Unregisters an `Address` vector from an `Indexer`. The addresses, when existing both in the tracker
-    /// and the `Indexer`, are first removed from the `Indexer` and on success get their reference count
-    /// decreased.
-    ///
-    /// Returns the addresses that where successfully unregistered from the `Indexer`.
-    pub fn unregister<T: Indexer>(&self, indexes: &mut T, mut addresses: Vec<Address>) -> Vec<Address> {
+    /// Unregisters targets from the indexer, releasing shared references on deactivation.
+    /// Returns the targets whose registration became inactive in the indexer.
+    pub fn unregister<T: Indexer, K: Clone + Into<TrackerKey>>(&self, indexes: &mut T, mut targets: Vec<K>) -> Vec<K> {
         if indexes.is_empty() {
             vec![]
         } else {
             let mut counter: usize = 0;
             let mut inner = self.inner.write();
-            addresses.retain(|address| {
+            targets.retain(|target| {
                 #[allow(clippy::arithmetic_side_effects, reason = "ARITH-SAFETY(INDEX)")]
                 {
                     counter += 1;
                 }
 
-                if counter.is_multiple_of(Self::ADDRESS_CHUNK_SIZE) {
+                if counter.is_multiple_of(Self::KEY_CHUNK_SIZE) {
                     RwLockWriteGuard::bump(&mut inner);
                 }
-                let spk = pay_to_address_script(address);
-                if let Some((index, _)) = inner.get(&spk) {
+                let key: TrackerKey = target.clone().into();
+                if let Some((index, _)) = inner.get(key.as_key_ref()) {
                     if indexes.remove(index) {
                         inner.dec_count(index);
                         true
@@ -589,13 +647,13 @@ impl Tracker {
                     false
                 }
             });
-            addresses
+            targets
         }
     }
 
     /// Unregisters all indexes contained in `indexes`, draining it in the process.
     pub fn unregister_indexes(&self, indexes: &mut Indexes) {
-        for chunk in &indexes.drain().chunks(Self::ADDRESS_CHUNK_SIZE) {
+        for chunk in &indexes.drain().chunks(Self::KEY_CHUNK_SIZE) {
             let mut inner = self.inner.write();
             chunk.for_each(|index| inner.dec_count(index));
         }
@@ -603,7 +661,7 @@ impl Tracker {
 
     pub fn to_addresses(&self, indexes: &[Index], prefix: Prefix) -> Vec<Address> {
         let mut addresses = Vec::with_capacity(indexes.len());
-        for chunk in indexes.chunks(Self::ADDRESS_CHUNK_SIZE) {
+        for chunk in indexes.chunks(Self::KEY_CHUNK_SIZE) {
             let inner = self.inner.read();
             chunk.iter().for_each(|index| {
                 if let Some(address) = inner.get_index_address(*index, prefix) {
@@ -623,7 +681,7 @@ impl Tracker {
     }
 
     pub fn capacity(&self) -> usize {
-        self.inner.read().script_pub_keys.capacity()
+        self.inner.read().keys.capacity()
     }
 
     pub fn addresses_preallocation(&self) -> Option<usize> {
@@ -642,11 +700,11 @@ pub struct TrackerReadGuard<'a> {
 }
 
 impl<'a> TrackerReadGuard<'a> {
-    pub fn get_index(&'a self, index: Index) -> Option<&'a ScriptPublicKey> {
+    pub fn get_index(&'a self, index: Index) -> Option<&'a TrackerKey> {
         self.guard.get_index(index)
     }
 
-    pub fn iter_keys(&'a self, indexes: &'a Indexes) -> impl Iterator<Item = Option<&'a ScriptPublicKey>> {
+    pub fn iter_keys(&'a self, indexes: &'a Indexes) -> impl Iterator<Item = Option<&'a TrackerKey>> {
         indexes.0.iter().cloned().map(|index| self.get_index(index))
     }
 }
@@ -661,6 +719,66 @@ mod tests {
         (start..start + count)
             .map(|i| Address::new(Prefix::Mainnet, kaspa_addresses::Version::PubKey, &Uint256::from_u64(i as u64).to_le_bytes()))
             .collect()
+    }
+
+    #[test]
+    fn mixed_tracker_keys_share_indexes_reference_counts_and_recycling() {
+        let tracker = Tracker::default();
+        let id = CovenantId::from_bytes([1; 32]);
+        let spk = ScriptPublicKey::from_vec(0, id.as_bytes().to_vec());
+        let targets = vec![TrackerKey::Spk(spk.clone()), TrackerKey::Cov(id)];
+        let mut first = Indexes::new(vec![]);
+        let mut second = Indexes::new(vec![]);
+        assert_eq!(tracker.register(&mut first, targets.clone()).unwrap(), targets);
+        let spk_index = tracker.get(&spk).unwrap().0;
+        let cov_index = tracker.get(&id).unwrap().0;
+        assert_ne!(spk_index, cov_index);
+        assert_eq!(tracker.len(), 2);
+
+        assert!(tracker.register(&mut first, vec![TrackerKey::Cov(id), TrackerKey::Cov(id)]).unwrap().is_empty());
+        assert_eq!(tracker.get(&id).unwrap().1, 1);
+        tracker.register(&mut second, vec![TrackerKey::Cov(id)]).unwrap();
+        assert_eq!(tracker.get(&id).unwrap().1, 2);
+        tracker.unregister(&mut first, vec![TrackerKey::Spk(spk.clone())]);
+
+        let new_id = CovenantId::from_u64_word(2);
+        tracker.register(&mut first, vec![TrackerKey::Cov(new_id)]).unwrap();
+        assert_eq!(tracker.get(&new_id).unwrap().0, spk_index);
+        assert_eq!(tracker.get(&id), Some((cov_index, 2)));
+        assert!(tracker.get(&spk).is_none());
+        assert!(tracker.matches(&first, &spk, Some(new_id)));
+        assert!(tracker.matches(&second, &spk, Some(id)));
+        assert!(!tracker.matches(&second, &spk, Some(new_id)));
+
+        tracker.unregister_indexes(&mut first);
+        tracker.unregister_indexes(&mut second);
+        assert!(tracker.is_empty());
+    }
+
+    #[test]
+    fn mixed_tracker_registration_rolls_back_new_keys_and_existing_counter_increments() {
+        let tracker = Tracker::new(Some(6));
+        let mut holder = Indexes::new(vec![]);
+        let address = create_addresses(0, 1).remove(0);
+        let spk = TrackerKey::from(address.clone());
+        let cov_keys: Vec<_> = (1..=5).map(|id| TrackerKey::Cov(CovenantId::from_u64_word(id))).collect();
+        let mut targets = vec![spk.clone()];
+        targets.extend(cov_keys.clone());
+        tracker.register(&mut holder, targets).unwrap();
+        let mut counters = Counters::new();
+        tracker.register(&mut counters, vec![spk.clone()]).unwrap();
+        let index = tracker.get_address(&address).unwrap().0;
+        tracker.unregister(&mut holder, vec![cov_keys[4].clone()]);
+
+        let new_id = CovenantId::from_u64_word(6);
+        let error = tracker
+            .register(&mut counters, vec![spk, TrackerKey::Cov(new_id), TrackerKey::Cov(CovenantId::from_u64_word(7))])
+            .unwrap_err();
+        assert!(matches!(error, Error::MaxCapacityReached));
+        assert_eq!(tracker.get_address(&address), Some((index, 2)));
+        assert_eq!(counters.iter().find(|(i, _)| **i == index).map(|(_, count)| *count), Some(1));
+        assert_eq!(tracker.get(&new_id).unwrap().1, 0);
+        assert_eq!(tracker.len(), 5);
     }
 
     #[test]

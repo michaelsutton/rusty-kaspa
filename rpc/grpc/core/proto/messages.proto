@@ -72,6 +72,7 @@ message KaspadRequest {
     GetUtxosByAddressesV2RequestMessage getUtxosByAddressesV2Request = 1120;
     GetUtxosByCovenantIdsRequestMessage getUtxosByCovenantIdsRequest = 1122;
     GetTransactionsByAcceptingBlockRequestMessage getTransactionsByAcceptingBlockRequest = 1124;
+    NotifyUtxosChangedFilteredRequestMessage notifyUtxosChangedFilteredRequest = 1126;
   }
 }
 
@@ -144,6 +145,7 @@ message KaspadResponse {
     GetUtxosByAddressesV2ResponseMessage getUtxosByAddressesV2Response = 1121;
     GetUtxosByCovenantIdsResponseMessage getUtxosByCovenantIdsResponse = 1123;
     GetTransactionsByAcceptingBlockResponseMessage getTransactionsByAcceptingBlockResponse = 1125;
+    NotifyUtxosChangedFilteredResponseMessage notifyUtxosChangedFilteredResponse = 1127;
   }
 }
 

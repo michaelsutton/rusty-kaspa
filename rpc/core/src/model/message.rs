@@ -3555,6 +3555,53 @@ impl Deserializer for NotifyUtxosChangedRequest {
 #[serde(rename_all = "camelCase")]
 pub struct NotifyUtxosChangedResponse {}
 
+/// Adds or removes explicit address/covenant-ID filters on the existing UTXO change stream.
+/// The filters combine with OR; an empty filter is rejected.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyUtxosChangedFilteredRequest {
+    pub addresses: Vec<RpcAddress>,
+    pub covenant_ids: Vec<RpcHash>,
+    pub command: Command,
+}
+
+impl Serializer for NotifyUtxosChangedFilteredRequest {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(Vec<RpcAddress>, &self.addresses, writer)?;
+        store!(Vec<RpcHash>, &self.covenant_ids, writer)?;
+        store!(Command, &self.command, writer)
+    }
+}
+
+impl Deserializer for NotifyUtxosChangedFilteredRequest {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        Ok(Self {
+            addresses: load!(Vec<RpcAddress>, reader)?,
+            covenant_ids: load!(Vec<RpcHash>, reader)?,
+            command: load!(Command, reader)?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyUtxosChangedFilteredResponse {}
+
+impl Serializer for NotifyUtxosChangedFilteredResponse {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)
+    }
+}
+
+impl Deserializer for NotifyUtxosChangedFilteredResponse {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        Ok(Self {})
+    }
+}
+
 impl Serializer for NotifyUtxosChangedResponse {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         store!(u16, &1, writer)?;
@@ -3605,7 +3652,11 @@ impl UtxosChangedNotification {
         context: &SubscriptionContext,
     ) -> Vec<RpcUtxosByAddressesEntry> {
         let subscription_data = subscription.data();
-        utxo_set.iter().filter(|x| subscription_data.contains(&x.utxo_entry.script_public_key, context)).cloned().collect()
+        utxo_set
+            .iter()
+            .filter(|x| subscription_data.matches(&x.utxo_entry.script_public_key, x.utxo_entry.covenant_id, context))
+            .cloned()
+            .collect()
     }
 }
 

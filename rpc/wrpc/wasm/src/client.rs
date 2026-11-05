@@ -32,6 +32,12 @@ use workflow_wasm::callback;
 use workflow_wasm::extensions::ObjectExtension;
 pub use workflow_wasm::serde::to_value;
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Array, typescript_type = "HexString[]")]
+    pub type CovenantIdArrayT;
+}
+
 declare! {
     IRpcConfig,
     r#"
@@ -836,6 +842,38 @@ impl RpcClient {
         if let Some(listener_id) = self.listener_id() {
             let addresses: Vec<Address> = addresses.try_into()?;
             self.inner.client.stop_notify(listener_id, Scope::UtxosChanged(UtxosChangedScope { addresses })).await?;
+        } else {
+            log_error!("RPC unsubscribe on a closed connection");
+        }
+        Ok(())
+    }
+
+    /// Subscribe to net UTXO changes for a nonempty set of covenant IDs, across scripts and addresses.
+    /// Uses the existing `utxos-changed` event. Requires `--utxoindex`, independently of `--covenant-index`.
+    #[wasm_bindgen(js_name = subscribeUtxosChangedByCovenantIds)]
+    pub async fn subscribe_utxos_changed_by_covenant_ids(&self, covenant_ids: CovenantIdArrayT) -> Result<()> {
+        let covenant_ids: Vec<RpcHash> = from_value(covenant_ids.into())?;
+        if covenant_ids.is_empty() {
+            return Err(NotifyError::EmptyUtxosChangedFilter.into());
+        }
+        if let Some(listener_id) = self.listener_id() {
+            self.inner.client.start_notify(listener_id, UtxosChangedFilteredScope::new(vec![], covenant_ids).into()).await?;
+        } else {
+            log_error!("RPC subscribe on a closed connection");
+        }
+        Ok(())
+    }
+
+    /// Unsubscribe the specified covenant IDs without affecting address subscriptions.
+    /// An empty covenant-ID list is rejected. The legacy `unsubscribeUtxosChanged([])` stops all UTXO subscriptions.
+    #[wasm_bindgen(js_name = unsubscribeUtxosChangedByCovenantIds)]
+    pub async fn unsubscribe_utxos_changed_by_covenant_ids(&self, covenant_ids: CovenantIdArrayT) -> Result<()> {
+        let covenant_ids: Vec<RpcHash> = from_value(covenant_ids.into())?;
+        if covenant_ids.is_empty() {
+            return Err(NotifyError::EmptyUtxosChangedFilter.into());
+        }
+        if let Some(listener_id) = self.listener_id() {
+            self.inner.client.stop_notify(listener_id, UtxosChangedFilteredScope::new(vec![], covenant_ids).into()).await?;
         } else {
             log_error!("RPC unsubscribe on a closed connection");
         }

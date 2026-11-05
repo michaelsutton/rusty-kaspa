@@ -3,8 +3,8 @@ use kaspa_notify::{scope::Scope, subscription::Command};
 use crate::protowire::{
     KaspadRequest, KaspadResponse, NotifyBlockAddedRequestMessage, NotifyFinalityConflictRequestMessage,
     NotifyNewBlockTemplateRequestMessage, NotifyPruningPointUtxoSetOverrideRequestMessage, NotifySinkBlueScoreChangedRequestMessage,
-    NotifyUtxosChangedRequestMessage, NotifyVirtualChainChangedRequestMessage, NotifyVirtualDaaScoreChangedRequestMessage,
-    kaspad_request, kaspad_response,
+    NotifyUtxosChangedFilteredRequestMessage, NotifyUtxosChangedRequestMessage, NotifyVirtualChainChangedRequestMessage,
+    NotifyVirtualDaaScoreChangedRequestMessage, kaspad_request, kaspad_response,
 };
 
 impl KaspadRequest {
@@ -49,6 +49,13 @@ impl kaspad_request::Payload {
                 addresses: scope.addresses.iter().map(|x| x.into()).collect::<Vec<String>>(),
                 command: command.into(),
             }),
+            Scope::UtxosChangedFiltered(scope) => {
+                kaspad_request::Payload::NotifyUtxosChangedFilteredRequest(NotifyUtxosChangedFilteredRequestMessage {
+                    addresses: scope.addresses.iter().map(ToString::to_string).collect(),
+                    covenant_ids: scope.covenant_ids.iter().map(ToString::to_string).collect(),
+                    command: command.into(),
+                })
+            }
             Scope::SinkBlueScoreChanged(_) => {
                 kaspad_request::Payload::NotifySinkBlueScoreChangedRequest(NotifySinkBlueScoreChangedRequestMessage {
                     command: command.into(),
@@ -75,6 +82,7 @@ impl kaspad_request::Payload {
                 | Payload::NotifyVirtualChainChangedRequest(_)
                 | Payload::NotifyFinalityConflictRequest(_)
                 | Payload::NotifyUtxosChangedRequest(_)
+                | Payload::NotifyUtxosChangedFilteredRequest(_)
                 | Payload::NotifySinkBlueScoreChangedRequest(_)
                 | Payload::NotifyVirtualDaaScoreChangedRequest(_)
                 | Payload::NotifyPruningPointUtxoSetOverrideRequest(_)

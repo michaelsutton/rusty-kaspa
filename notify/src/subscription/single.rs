@@ -3,7 +3,7 @@ use crate::{
     error::Result,
     events::EventType,
     listener::ListenerId,
-    scope::{Scope, UtxosChangedScope, VirtualChainChangedScope},
+    scope::{Scope, UtxosChangedFilteredScope, UtxosChangedScope, VirtualChainChangedScope},
     subscription::{
         BroadcastingSingle, Command, DynSubscription, Mutation, MutationOutcome, MutationPolicies, Single, Subscription,
         UtxosChangedMutationPolicy, context::SubscriptionContext,
@@ -13,6 +13,7 @@ use itertools::Itertools;
 use kaspa_addresses::{Address, Prefix};
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_core::trace;
+use kaspa_hashes::Hash as CovenantId;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     collections::hash_set,
@@ -182,9 +183,9 @@ enum UtxosChangedMutation {
     All,
 }
 
-impl From<(Command, &UtxosChangedScope)> for UtxosChangedMutation {
-    fn from((command, scope): (Command, &UtxosChangedScope)) -> Self {
-        match (command, scope.addresses.is_empty()) {
+impl From<(Command, &UtxosChangedFilteredScope)> for UtxosChangedMutation {
+    fn from((command, scope): (Command, &UtxosChangedFilteredScope)) -> Self {
+        match (command, scope.is_empty()) {
             (Command::Stop, true) => Self::None,
             (Command::Stop, false) => Self::Remove,
             (Command::Start, false) => Self::Add,
@@ -199,7 +200,7 @@ pub enum UtxosChangedState {
     #[default]
     None,
 
-    /// Active on a set of selected addresses
+    /// Active on selected addresses or covenant IDs
     Selected,
 
     /// Active on all addresses
@@ -232,16 +233,20 @@ pub struct UtxosChangedSubscriptionData {
     /// Can be mutated without affecting neither equality nor hash of the struct
     state: UtxosChangedState,
 
-    /// Address indexes in `SubscriptionContext`
+    /// Subscription-key indexes in `SubscriptionContext`
     ///
     /// Can be mutated without affecting neither equality nor hash of the struct
     indexes: Indexes,
+
+    /// Number of covenant keys in `indexes`. Keeps the SPK-only filtering path
+    /// independent of the subscription size when choosing which set to iterate.
+    covenant_count: usize,
 }
 
 impl UtxosChangedSubscriptionData {
     fn with_capacity(state: UtxosChangedState, capacity: usize) -> Self {
         let indexes = Indexes::with_capacity(capacity);
-        Self { state, indexes }
+        Self { state, indexes, covenant_count: 0 }
     }
 
     #[inline(always)]
@@ -251,6 +256,22 @@ impl UtxosChangedSubscriptionData {
 
     pub fn contains(&self, spk: &ScriptPublicKey, context: &SubscriptionContext) -> bool {
         context.address_tracker.contains(&self.indexes, spk)
+    }
+
+    pub fn contains_covenant_id(&self, id: &CovenantId, context: &SubscriptionContext) -> bool {
+        context.address_tracker.contains(&self.indexes, id)
+    }
+
+    pub fn has_covenant_ids(&self) -> bool {
+        self.covenant_count > 0
+    }
+
+    pub fn matches(&self, spk: &ScriptPublicKey, covenant_id: Option<CovenantId>, context: &SubscriptionContext) -> bool {
+        if self.has_covenant_ids() {
+            context.address_tracker.matches(&self.indexes, spk, covenant_id)
+        } else {
+            self.contains(spk, context)
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -289,11 +310,60 @@ impl UtxosChangedSubscriptionData {
         // TODO: consider using a provided prefix
         let removed = self.to_addresses(Prefix::Mainnet, context);
         context.address_tracker.unregister_indexes(&mut self.indexes);
+        self.covenant_count = 0;
         removed
     }
 
     pub fn to_all(&self) -> bool {
         matches!(self.state, UtxosChangedState::All)
+    }
+
+    fn to_filters(&self, context: &SubscriptionContext) -> UtxosChangedFilteredScope {
+        let mut filters = UtxosChangedFilteredScope::default();
+        // Release the tracker read lock between entries, as in address-only scope reconstruction.
+        for index in self.indexes.iter() {
+            let tracker = context.address_tracker.data();
+            if let Some(key) = tracker.get_index(*index) {
+                filters.push_key(key, Prefix::Mainnet);
+            }
+        }
+        filters
+    }
+
+    fn register_filters(
+        &mut self,
+        filters: UtxosChangedFilteredScope,
+        context: &SubscriptionContext,
+    ) -> Result<UtxosChangedFilteredScope> {
+        // Preserve the caller's address prefixes on the existing address-only path.
+        if filters.covenant_ids.is_empty() {
+            return Ok(UtxosChangedFilteredScope::new(self.register(filters.addresses, context)?, vec![]));
+        }
+        let added = context.address_tracker.register(&mut self.indexes, filters.into_keys())?;
+        let added = UtxosChangedFilteredScope::from_keys(added.iter(), Prefix::Mainnet);
+        // Count only successful new registrations; duplicates and capacity rollback
+        // must not change the number of covenant keys held by this subscription.
+        self.covenant_count =
+            self.covenant_count.checked_add(added.covenant_ids.len()).expect("covenant count fits in subscription size");
+        Ok(added)
+    }
+
+    fn unregister_filters(&mut self, filters: UtxosChangedFilteredScope, context: &SubscriptionContext) -> UtxosChangedFilteredScope {
+        if filters.covenant_ids.is_empty() {
+            return UtxosChangedFilteredScope::new(self.unregister(filters.addresses, context), vec![]);
+        }
+        let removed = context.address_tracker.unregister(&mut self.indexes, filters.into_keys());
+        let removed = UtxosChangedFilteredScope::from_keys(removed.iter(), Prefix::Mainnet);
+        self.covenant_count =
+            self.covenant_count.checked_sub(removed.covenant_ids.len()).expect("only registered covenant keys are removed");
+        removed
+    }
+
+    fn clear_filters(&mut self, context: &SubscriptionContext) -> UtxosChangedFilteredScope {
+        let removed = self.to_filters(context);
+        context.address_tracker.unregister_indexes(&mut self.indexes);
+        self.covenant_count = 0;
+        removed
     }
 }
 
@@ -428,7 +498,10 @@ impl Single for UtxosChangedSubscription {
         context: &SubscriptionContext,
     ) -> Result<MutationOutcome> {
         assert_eq!(self.event_type(), mutation.event_type());
-        let outcome = if let Scope::UtxosChanged(scope) = mutation.scope {
+        let outcome = if let Some((scope, blanket)) = mutation.scope.into_utxos_changed_filters() {
+            if !blanket && scope.is_empty() {
+                return Err(crate::error::Error::EmptyUtxosChangedFilter);
+            }
             let mut data = self.data_mut();
             let state = data.state;
             let mutation_type = UtxosChangedMutation::from((mutation.command, &scope));
@@ -439,11 +512,11 @@ impl Single for UtxosChangedSubscription {
                 }
                 (UtxosChangedState::None, UtxosChangedMutation::Add) => {
                     // State None + Mutation Add(A) => Mutated new state Selected(A)
-                    let addresses = data.register(scope.addresses, context)?;
+                    let added = data.register_filters(scope, context)?;
                     data.update_state(UtxosChangedState::Selected);
                     let mutations = match policies.utxo_changed {
                         UtxosChangedMutationPolicy::AddressSet => {
-                            vec![Mutation::new(mutation.command, UtxosChangedScope::new(addresses).into())]
+                            vec![Mutation::new(mutation.command, added.into_scope())]
                         }
                         UtxosChangedMutationPolicy::Wildcard => {
                             vec![Mutation::new(mutation.command, UtxosChangedScope::default().into())]
@@ -460,11 +533,11 @@ impl Single for UtxosChangedSubscription {
                 (UtxosChangedState::Selected, UtxosChangedMutation::None) => {
                     // State Selected(S) + Mutation None => Mutated new state None
                     data.update_state(UtxosChangedState::None);
-                    let removed = data.unregister_indexes(context);
-                    assert!(!removed.is_empty(), "state Selected implies a non empty address set");
+                    let removed = data.clear_filters(context);
+                    assert!(!removed.is_empty(), "state Selected implies a nonempty filter set");
                     let mutations = match policies.utxo_changed {
                         UtxosChangedMutationPolicy::AddressSet => {
-                            vec![Mutation::new(Command::Stop, UtxosChangedScope::new(removed).into())]
+                            vec![Mutation::new(Command::Stop, removed.into_scope())]
                         }
                         UtxosChangedMutationPolicy::Wildcard => {
                             vec![Mutation::new(Command::Stop, UtxosChangedScope::default().into())]
@@ -474,12 +547,12 @@ impl Single for UtxosChangedSubscription {
                 }
                 (UtxosChangedState::Selected, UtxosChangedMutation::Remove) => {
                     // State Selected(S) + Mutation Remove(R) => Mutated state Selected(S – R) or mutated new state None or no change
-                    let removed = data.unregister(scope.addresses, context);
+                    let removed = data.unregister_filters(scope, context);
                     match (removed.is_empty(), data.indexes.is_empty()) {
                         (false, false) => {
                             let mutations = match policies.utxo_changed {
                                 UtxosChangedMutationPolicy::AddressSet => {
-                                    vec![Mutation::new(Command::Stop, UtxosChangedScope::new(removed).into())]
+                                    vec![Mutation::new(Command::Stop, removed.into_scope())]
                                 }
                                 UtxosChangedMutationPolicy::Wildcard => vec![],
                             };
@@ -489,7 +562,7 @@ impl Single for UtxosChangedSubscription {
                             data.update_state(UtxosChangedState::None);
                             let mutations = match policies.utxo_changed {
                                 UtxosChangedMutationPolicy::AddressSet => {
-                                    vec![Mutation::new(Command::Stop, UtxosChangedScope::new(removed).into())]
+                                    vec![Mutation::new(Command::Stop, removed.into_scope())]
                                 }
                                 UtxosChangedMutationPolicy::Wildcard => {
                                     vec![Mutation::new(Command::Stop, UtxosChangedScope::default().into())]
@@ -502,12 +575,12 @@ impl Single for UtxosChangedSubscription {
                 }
                 (UtxosChangedState::Selected, UtxosChangedMutation::Add) => {
                     // State Selected(S) + Mutation Add(A) => Mutated state Selected(A ∪ S)
-                    let added = data.register(scope.addresses, context)?;
+                    let added = data.register_filters(scope, context)?;
                     match added.is_empty() {
                         false => {
                             let mutations = match policies.utxo_changed {
                                 UtxosChangedMutationPolicy::AddressSet => {
-                                    vec![Mutation::new(Command::Start, UtxosChangedScope::new(added).into())]
+                                    vec![Mutation::new(Command::Start, added.into_scope())]
                                 }
                                 UtxosChangedMutationPolicy::Wildcard => vec![],
                             };
@@ -518,12 +591,12 @@ impl Single for UtxosChangedSubscription {
                 }
                 (UtxosChangedState::Selected, UtxosChangedMutation::All) => {
                     // State Selected(S) + Mutation All => Mutated new state All
-                    let removed = data.unregister_indexes(context);
-                    assert!(!removed.is_empty(), "state Selected implies a non empty address set");
+                    let removed = data.clear_filters(context);
+                    assert!(!removed.is_empty(), "state Selected implies a nonempty filter set");
                     data.update_state(UtxosChangedState::All);
                     let mutations = match policies.utxo_changed {
                         UtxosChangedMutationPolicy::AddressSet => vec![
-                            Mutation::new(Command::Stop, UtxosChangedScope::new(removed).into()),
+                            Mutation::new(Command::Stop, removed.into_scope()),
                             Mutation::new(Command::Start, UtxosChangedScope::default().into()),
                         ],
                         UtxosChangedMutationPolicy::Wildcard => vec![],
@@ -541,12 +614,12 @@ impl Single for UtxosChangedSubscription {
                     MutationOutcome::new()
                 }
                 (UtxosChangedState::All, UtxosChangedMutation::Add) => {
-                    // State All + Mutation Add(A) => Mutated new state Selectee(A)
-                    let added = data.register(scope.addresses, context)?;
+                    // State All + Mutation Add(A) => Mutated new state Selected(A)
+                    let added = data.register_filters(scope, context)?;
                     data.update_state(UtxosChangedState::Selected);
                     let mutations = match policies.utxo_changed {
                         UtxosChangedMutationPolicy::AddressSet => vec![
-                            Mutation::new(Command::Start, UtxosChangedScope::new(added).into()),
+                            Mutation::new(Command::Start, added.into_scope()),
                             Mutation::new(Command::Stop, UtxosChangedScope::default().into()),
                         ],
                         UtxosChangedMutationPolicy::Wildcard => vec![],
@@ -575,8 +648,7 @@ impl Subscription for UtxosChangedSubscription {
     }
 
     fn scope(&self, context: &SubscriptionContext) -> Scope {
-        // TODO: consider using a provided prefix
-        UtxosChangedScope::new(self.data().to_addresses(Prefix::Mainnet, context)).into()
+        self.data().to_filters(context).into_scope()
     }
 }
 

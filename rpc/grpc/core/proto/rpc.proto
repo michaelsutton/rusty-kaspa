@@ -528,6 +528,18 @@ message NotifyUtxosChangedResponseMessage {
   RPCError error = 1000;
 }
 
+// Explicit address/covenant-ID filters on the existing UTXO change stream.
+// At least one list must be nonempty. Matches are combined with OR.
+message NotifyUtxosChangedFilteredRequestMessage {
+  repeated string addresses = 1;
+  repeated string covenantIds = 2;
+  RpcNotifyCommand command = 101;
+}
+
+message NotifyUtxosChangedFilteredResponseMessage {
+  RPCError error = 1000;
+}
+
 // UtxosChangedNotificationMessage is sent whenever the UTXO index had been updated.
 //
 // See: NotifyUtxosChangedRequestMessage

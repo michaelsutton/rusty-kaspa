@@ -40,6 +40,7 @@ pub enum RpcApiOps {
     NotifyVirtualDaaScoreChanged = 16,
     NotifyVirtualChainChanged = 17,
     NotifySinkBlueScoreChanged = 18,
+    NotifyUtxosChangedFiltered = 19,
 
     // Notification ops required by wRPC
 
@@ -159,6 +160,7 @@ impl RpcApiOps {
             RpcApiOps::NotifyBlockAdded
                 | RpcApiOps::NotifyNewBlockTemplate
                 | RpcApiOps::NotifyUtxosChanged
+                | RpcApiOps::NotifyUtxosChangedFiltered
                 | RpcApiOps::NotifyVirtualChainChanged
                 | RpcApiOps::NotifyPruningPointUtxoSetOverride
                 | RpcApiOps::NotifyFinalityConflict

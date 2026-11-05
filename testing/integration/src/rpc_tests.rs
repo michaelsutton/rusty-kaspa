@@ -17,7 +17,8 @@ use kaspa_notify::{
     connection::{ChannelConnection, ChannelType},
     scope::{
         BlockAddedScope, FinalityConflictScope, NewBlockTemplateScope, PruningPointUtxoSetOverrideScope, Scope,
-        SinkBlueScoreChangedScope, UtxosChangedScope, VirtualChainChangedScope, VirtualDaaScoreChangedScope,
+        SinkBlueScoreChangedScope, UtxosChangedFilteredScope, UtxosChangedScope, VirtualChainChangedScope,
+        VirtualDaaScoreChangedScope,
     },
 };
 use kaspa_rpc_core::{Notification, api::rpc::RpcApi, model::*};
@@ -810,6 +811,16 @@ async fn sanity_test() {
                 let id = listener_id;
                 tst!(op, {
                     rpc_client.start_notify(id, UtxosChangedScope::new(vec![]).into()).await.unwrap();
+                })
+            }
+            KaspadPayloadOps::NotifyUtxosChangedFiltered => {
+                let rpc_client = client.clone();
+                let id = listener_id;
+                tst!(op, {
+                    rpc_client
+                        .start_notify(id, UtxosChangedFilteredScope::new(vec![], vec![Hash::from_u64_word(1)]).into())
+                        .await
+                        .unwrap();
                 })
             }
             KaspadPayloadOps::NotifySinkBlueScoreChanged => {

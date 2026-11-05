@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
-    #[error("the address store reached the maximum capacity")]
+    #[error("the subscription key store reached the maximum capacity")]
     MaxCapacityReached,
 }
 

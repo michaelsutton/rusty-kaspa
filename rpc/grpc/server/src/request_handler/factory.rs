@@ -92,6 +92,7 @@ impl Factory {
                 NotifyNewBlockTemplate,
                 NotifyFinalityConflict,
                 NotifyUtxosChanged,
+                NotifyUtxosChangedFiltered,
                 NotifySinkBlueScoreChanged,
                 NotifyPruningPointUtxoSetOverride,
                 NotifyVirtualDaaScoreChanged,

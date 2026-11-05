@@ -74,6 +74,7 @@ pub mod kaspad_request_convert {
     impl_into_kaspad_request!(NotifyBlockAdded);
     impl_into_kaspad_request!(NotifyNewBlockTemplate);
     impl_into_kaspad_request!(NotifyUtxosChanged);
+    impl_into_kaspad_request!(NotifyUtxosChangedFiltered);
     impl_into_kaspad_request!(NotifyPruningPointUtxoSetOverride);
     impl_into_kaspad_request!(NotifyFinalityConflict);
     impl_into_kaspad_request!(NotifyVirtualDaaScoreChanged);
@@ -218,6 +219,7 @@ pub mod kaspad_response_convert {
     impl_into_kaspad_notify_response!(NotifyBlockAdded);
     impl_into_kaspad_notify_response!(NotifyNewBlockTemplate);
     impl_into_kaspad_notify_response!(NotifyUtxosChanged);
+    impl_into_kaspad_notify_response!(NotifyUtxosChangedFiltered);
     impl_into_kaspad_notify_response!(NotifyPruningPointUtxoSetOverride);
     impl_into_kaspad_notify_response!(NotifyFinalityConflict);
     impl_into_kaspad_notify_response!(NotifyVirtualDaaScoreChanged);

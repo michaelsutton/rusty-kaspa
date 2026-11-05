@@ -12,6 +12,8 @@ pub mod hex_cnv;
 pub mod mempool;
 pub mod message;
 pub mod network;
+#[cfg(test)]
+mod notification_tests;
 pub mod optional;
 pub mod peer;
 pub mod script_class;

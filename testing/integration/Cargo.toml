@@ -25,6 +25,7 @@ kaspa-grpc-core.workspace = true
 kaspa-grpc-server.workspace = true
 kaspa-hashes = { workspace = true, default-features = true }
 kaspa-index-processor.workspace = true
+kaspa-index-core.workspace = true
 kaspa-math = { workspace = true, features = ["std"] }
 kaspa-merkle.workspace = true
 kaspa-muhash = { workspace = true, features = ["std"] }

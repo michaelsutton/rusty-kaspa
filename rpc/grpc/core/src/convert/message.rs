@@ -610,6 +610,14 @@ from!(item: &kaspa_rpc_core::NotifyUtxosChangedRequest, protowire::StopNotifying
     Self { addresses: item.addresses.iter().map(|x| x.into()).collect() }
 });
 from!(RpcResult<&kaspa_rpc_core::NotifyUtxosChangedResponse>, protowire::NotifyUtxosChangedResponseMessage);
+from!(item: &kaspa_rpc_core::NotifyUtxosChangedFilteredRequest, protowire::NotifyUtxosChangedFilteredRequestMessage, {
+    Self {
+        addresses: item.addresses.iter().map(ToString::to_string).collect(),
+        covenant_ids: item.covenant_ids.iter().map(ToString::to_string).collect(),
+        command: item.command.into(),
+    }
+});
+from!(RpcResult<&kaspa_rpc_core::NotifyUtxosChangedFilteredResponse>, protowire::NotifyUtxosChangedFilteredResponseMessage);
 from!(RpcResult<&kaspa_rpc_core::NotifyUtxosChangedResponse>, protowire::StopNotifyingUtxosChangedResponseMessage);
 
 from!(item: &kaspa_rpc_core::NotifyPruningPointUtxoSetOverrideRequest, protowire::NotifyPruningPointUtxoSetOverrideRequestMessage, {
@@ -1204,6 +1212,14 @@ try_from!(item: &protowire::StopNotifyingUtxosChangedRequestMessage, kaspa_rpc_c
     }
 });
 try_from!(&protowire::NotifyUtxosChangedResponseMessage, RpcResult<kaspa_rpc_core::NotifyUtxosChangedResponse>);
+try_from!(item: &protowire::NotifyUtxosChangedFilteredRequestMessage, kaspa_rpc_core::NotifyUtxosChangedFilteredRequest, {
+    Self {
+        addresses: item.addresses.iter().map(|x| x.as_str().try_into()).collect::<Result<Vec<_>, _>>()?,
+        covenant_ids: item.covenant_ids.iter().map(|x| x.parse()).collect::<Result<Vec<_>, _>>()?,
+        command: item.command.into(),
+    }
+});
+try_from!(&protowire::NotifyUtxosChangedFilteredResponseMessage, RpcResult<kaspa_rpc_core::NotifyUtxosChangedFilteredResponse>);
 try_from!(&protowire::StopNotifyingUtxosChangedResponseMessage, RpcResult<kaspa_rpc_core::NotifyUtxosChangedResponse>);
 
 try_from!(
