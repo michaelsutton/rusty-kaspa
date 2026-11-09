@@ -49,6 +49,8 @@ impl IndexService {
         let notifier = Arc::new(IndexNotifier::new(INDEX_SERVICE, events, vec![collector], vec![], subscription_context, 1, policies));
 
         // Manually subscribe to index-processor related event types
+        // The index needs all consensus UTXO changes, independently of downstream
+        // address/covenant filters. An empty UtxosChangedScope is the blanket scope.
         consensus_notifier
             .try_start_notify(consensus_notify_listener_id, UtxosChangedScope::default().into())
             .expect("the subscription always succeeds");

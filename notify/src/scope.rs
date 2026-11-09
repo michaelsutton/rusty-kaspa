@@ -186,6 +186,12 @@ impl Deserializer for FinalityConflictResolvedScope {
     }
 }
 
+/// Address-filtered or blanket scope for [`EventType::UtxosChanged`].
+///
+/// This scope remains supported with its existing wire encoding. A nonempty
+/// address list selects matching UTXOs. An empty list represents a blanket scope:
+/// `Start` subscribes to all UTXO changes, and `Stop` clears all address and covenant
+/// filters. Internal blanket subscriptions and mutations continue to use this form.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct UtxosChangedScope {
     pub addresses: Vec<Address>,
@@ -216,9 +222,13 @@ impl UtxosChangedScope {
     }
 }
 
-/// Explicit address/covenant-ID filters. Both lists must not be empty together.
-/// Kept separate from the legacy scope so older nodes reject this scope rather
-/// than interpreting a covenant-only subscription as a blanket subscription.
+/// Explicit address/covenant-ID filters for [`EventType::UtxosChanged`].
+///
+/// Address and covenant matches are combined with OR. At least one list must be
+/// nonempty; blanket subscriptions use [`UtxosChangedScope`] with no addresses.
+/// Both scope forms represent the same event. The separate wire representation
+/// allows older nodes to reject unsupported filters instead of interpreting a
+/// covenant-only subscription as a blanket subscription.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UtxosChangedFilteredScope {
