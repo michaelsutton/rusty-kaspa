@@ -132,9 +132,9 @@ kaspa-rpc-core = { version = "2.1.0", path = "rpc/core" }
 kaspa-seq-commit = { version = "2.1.0", path = "consensus/seq-commit" }
 kaspa-rpc-macros = { version = "2.1.0", path = "rpc/macros" }
 kaspa-rpc-service = { version = "2.1.0", path = "rpc/service" }
-kaspa-txscript = { version = "2.1.0", path = "crypto/txscript" }
+kaspa-txscript = { version = "2.2.0", path = "crypto/txscript" }
 kaspa-txscript-errors = { version = "2.1.0", path = "crypto/txscript/errors" }
-kaspa-txscript-zk-sdk = { version = "2.1.0", path = "crypto/txscript/zk-sdk" }
+kaspa-txscript-zk-sdk = { version = "2.2.0", path = "crypto/txscript/zk-sdk" }
 kaspa-utils = { version = "2.1.0", path = "utils", default-features = false }
 kaspa-utils-tower = { version = "2.1.0", path = "utils/tower" }
 kaspa-system-info = { version = "2.1.0", path = "system-info" }

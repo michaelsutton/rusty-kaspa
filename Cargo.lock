@@ -4166,7 +4166,7 @@ dependencies = [
 
 [[package]]
 name = "kaspa-txscript"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",
@@ -4225,7 +4225,7 @@ dependencies = [
 
 [[package]]
 name = "kaspa-txscript-zk-sdk"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "ark-bn254 0.6.0",
  "ark-ec 0.6.0",

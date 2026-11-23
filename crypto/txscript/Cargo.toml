@@ -2,7 +2,7 @@
 name = "kaspa-txscript"
 description = "Kaspa txscript engine library"
 rust-version.workspace = true
-version.workspace = true
+version = "2.2.0"
 edition.workspace = true
 authors.workspace = true
 include.workspace = true
